@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"log"
 	"net"
-	"sync"
 )
 
 // The local Node
@@ -81,28 +80,22 @@ func (n *Node) Broadcast(msg *Message) error {
 
 func (n *Node) Start() error {
 	n.running = true
-	var wg sync.WaitGroup
-	wg.Add(len(n.remoteAddrs))
 
 	for _, addr := range n.remoteAddrs {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
 			log.Printf("%s->%s error: %v", n.localAddr, addr, err)
-			wg.Done()
 			continue
 		}
-		wg.Done()
 		go n.registerRemote(conn)
 	}
 
-	wg.Add(1)
 	var err error
 	if n.ln, err = net.Listen("tcp", n.localAddr); err != nil {
 		return err
 	}
 
 	go func() {
-		wg.Done()
 		defer n.ln.Close()
 		for n.running {
 			conn, err := n.ln.Accept()
@@ -114,7 +107,6 @@ func (n *Node) Start() error {
 		}
 	}()
 
-	wg.Wait()
 	return nil
 }
 
