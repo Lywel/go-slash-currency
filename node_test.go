@@ -1,8 +1,8 @@
 package gossipnet_test
 
 import (
-	"."
 	"encoding/json"
+	"github.com/Lywel/go-gossipnet"
 	"sync"
 	"testing"
 )
