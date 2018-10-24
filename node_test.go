@@ -1,43 +1,12 @@
 package gossipnet_test
 
 import (
-	"encoding/json"
+	"bytes"
 	"github.com/Lywel/go-gossipnet"
+	"net"
 	"sync"
 	"testing"
 )
-
-type pbftMsg struct {
-	Type  int
-	Msg   string
-	Other string
-}
-
-type idMsg struct {
-	PublicKey string
-}
-
-// Message types
-const (
-	ibftMsg = iota
-	joinMsg
-	leaveMsg
-)
-
-func newJoinMsg(publicKey string) (*gossipnet.Message, error) {
-	id := idMsg{publicKey}
-	idBytes, err := json.Marshal(id)
-	if err != nil {
-		return nil, err
-	}
-
-	join := gossipnet.Message{
-		Data: idBytes,
-		Type: joinMsg,
-	}
-
-	return &join, nil
-}
 
 func TestNew(t *testing.T) {
 	var local, remote *gossipnet.Node
@@ -68,6 +37,14 @@ func TestNew(t *testing.T) {
 	wg.Wait()
 }
 
+type netMan struct {
+	list map[net.Addr]bool
+}
+
+func (netMan) IsInteressted(net.Addr) bool {
+	return true
+}
+
 func TestBroadcast(t *testing.T) {
 	var local, remote *gossipnet.Node
 	var err error
@@ -83,23 +60,20 @@ func TestBroadcast(t *testing.T) {
 	}
 	defer local.Stop()
 
-	ibft := pbftMsg{42, "TestNew msg", "TestNew other"}
-	ibftBytes, err := json.Marshal(ibft)
+	ref := []byte("This is a test")
 
 	go func() {
 		if err = remote.Start(); err != nil {
 			t.Fatal(err)
 		}
 		defer remote.Stop()
-		if err = remote.Broadcast(&gossipnet.Message{ibftBytes, 0}); err != nil {
-			t.Fatal(err)
-		}
+
+		var mngr netMan
+		remote.Broadcast(mngr, ref)
 	}()
 
-	netMsg := <-local.OutChan
-	var msg pbftMsg
-	json.Unmarshal(netMsg.Data, &msg)
-	if ibft != msg {
-		t.Fatal("received message is diffrent :/")
+	received := <-local.ReadC()
+	if bytes.Compare(received, ref) != 0 {
+		t.Fatal("received msg expected to be '" + string(ref) + "' but got '" + string(received) + "' instead.")
 	}
 }

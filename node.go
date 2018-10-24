@@ -2,82 +2,95 @@ package gossipnet
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"net"
 )
 
-// The local Node
+// Node is the local Node
 type Node struct {
 	localAddr   string
 	remoteAddrs []string
 	ln          net.Listener
 	running     bool
-	remoteNodes map[string]*remoteNode
-	OutChan     chan *Message
+	remoteNodes map[net.Addr]net.Conn
+	readC       chan []byte
 }
 
-// Definition of a remote Node
-type remoteNode struct {
-	Data interface{}
-	Conn net.Conn
-}
-
-// Create a new Network Gossip Node
+// New Creates a Network Gossiping Node
 func New(publicKey, localAddr string, remoteAddrs []string) (*Node, error) {
 	return &Node{
 		localAddr:   localAddr,
 		remoteAddrs: remoteAddrs,
 		running:     false,
-		remoteNodes: make(map[string]*remoteNode),
-		OutChan:     make(chan *Message),
+		remoteNodes: make(map[net.Addr]net.Conn),
+		readC:       make(chan []byte),
 	}, nil
+}
+
+func (n *Node) recv(payload []byte) {
+	// protection against blocking channel
+	select {
+	case n.readC <- payload:
+	default:
+	}
 }
 
 // Save the new remote node
 func (n *Node) registerRemote(conn net.Conn) {
-	node := &remoteNode{
-		Data: nil,
-		Conn: conn,
-	}
-	n.remoteNodes[conn.RemoteAddr().String()] = node
+	n.remoteNodes[conn.RemoteAddr()] = conn
 	defer conn.Close()
-	defer delete(n.remoteNodes, conn.RemoteAddr().String())
+	defer delete(n.remoteNodes, conn.RemoteAddr())
 
 	// Start reading
 	buf := bufio.NewReader(conn)
 
 	for {
-		bytes, err := buf.ReadBytes('\n')
-		if err != nil {
-			log.Printf("%s<-%s close: %v", n.localAddr, conn.RemoteAddr(), err)
-			break
-		}
-		var msg Message
-		if err := msg.Decode(bytes); err != nil {
-			log.Printf("%s<-%s msg: %v", n.localAddr, conn.RemoteAddr(), err)
+		payload, err := buf.ReadBytes('\n')
+		switch err {
+		case nil:
+			n.recv(payload[:len(payload)-1])
 			continue
+		case io.EOF:
+		default:
+			log.Print(err)
 		}
-		n.OutChan <- &msg
+		break
 	}
 }
 
-func (n *Node) Broadcast(msg *Message) error {
-	bytes, err := msg.Encode()
-	if err != nil {
-		return err
-	}
-	bytes = append(bytes, '\n')
+// nodeManager is an interface which filters used connections
+type nodeManager interface {
+	IsInteressted(net.Addr) bool
+}
 
-	for addr, node := range n.remoteNodes {
-		if _, err := node.Conn.Write(bytes); err != nil {
-			log.Printf("%s->%s error: %v", n.localAddr, addr, err)
-			continue
+// ReadC returns a readonly chanel on which received messages will be funneled
+func (n *Node) ReadC() <-chan []byte {
+	return n.readC
+}
+
+// Gossip sends a Message to all peers passing selection (except self)
+func (n *Node) Gossip(manager nodeManager, payload []byte) error {
+	payload = append(payload, '\n')
+
+	for addr, conn := range n.remoteNodes {
+		if manager.IsInteressted(addr) {
+			if _, err := conn.Write(payload); err != nil {
+				log.Printf("%s->%s error: %v", n.localAddr, addr, err)
+				continue
+			}
 		}
 	}
-
 	return nil
 }
 
+// Broadcast sends a Message to all peers passing selection (including self)
+func (n *Node) Broadcast(manager nodeManager, payload []byte) {
+	n.Gossip(manager, payload)
+	n.recv(payload)
+}
+
+// Start starts the node (client / server)
 func (n *Node) Start() error {
 	n.running = true
 
@@ -110,11 +123,11 @@ func (n *Node) Start() error {
 	return nil
 }
 
+// Stop closes all connection and stops listening
 func (n *Node) Stop() {
 	n.running = false
 	n.ln.Close()
-	for _, node := range n.remoteNodes {
-		node.Conn.Close()
-		delete(n.remoteNodes, node.Conn.RemoteAddr().String())
+	for _, conn := range n.remoteNodes {
+		conn.Close()
 	}
 }
