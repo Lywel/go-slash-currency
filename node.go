@@ -176,7 +176,7 @@ func (n *Node) Start() error {
 				log.Printf("%s error: %v", n.localAddr, err)
 				continue
 			}
-			n.registerRemote(conn)
+			go n.registerRemote(conn)
 		}
 	}()
 
