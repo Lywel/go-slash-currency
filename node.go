@@ -27,7 +27,7 @@ type Node struct {
 }
 
 // New Creates a Network Gossiping Node
-func New(publicKey, localAddr string, remoteAddrs []string) (*Node, error) {
+func New(localAddr string, remoteAddrs []string) (*Node, error) {
 	recentMessages, _ := lru.NewARC(inmemoryPeers)
 	knownMessages, _ := lru.NewARC(inmemoryMessages)
 
