@@ -10,25 +10,20 @@ import (
 
 func TestNew(t *testing.T) {
 	var local, remote *gossipnet.Node
-	var err error
-	if local, err = gossipnet.New("pub1", "localhost:3000", []string{}); err != nil {
-		t.Fatal(err)
-	}
-	if remote, err = gossipnet.New("pub2", "localhost:3001", []string{":3000"}); err != nil {
-		t.Fatal(err)
-	}
+	local = gossipnet.New("localhost:3000", []string{})
+	remote = gossipnet.New("localhost:3001", []string{":3000"})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	if err = local.Start(); err != nil {
+	if err := local.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer local.Stop()
 
 	go func() {
 		defer wg.Done()
-		if err = remote.Start(); err != nil {
+		if err := remote.Start(); err != nil {
 			t.Fatal(err)
 		}
 		defer remote.Stop()
@@ -47,15 +42,10 @@ func (netMan) IsInteressted(net.Addr) bool {
 
 func TestBroadcast(t *testing.T) {
 	var local, remote *gossipnet.Node
-	var err error
-	if local, err = gossipnet.New("pub1", "localhost:3000", []string{}); err != nil {
-		t.Fatal(err)
-	}
-	if remote, err = gossipnet.New("pub2", "localhost:3001", []string{":3000"}); err != nil {
-		t.Fatal(err)
-	}
+	local = gossipnet.New("localhost:3000", []string{})
+	remote = gossipnet.New("localhost:3001", []string{":3000"})
 
-	if err = local.Start(); err != nil {
+	if err := local.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer local.Stop()
@@ -63,16 +53,15 @@ func TestBroadcast(t *testing.T) {
 	ref := []byte("This is a test")
 
 	go func() {
-		if err = remote.Start(); err != nil {
+		if err := remote.Start(); err != nil {
 			t.Fatal(err)
 		}
 		defer remote.Stop()
 
-		var mngr netMan
-		remote.Broadcast(mngr, ref)
+		remote.Broadcast(ref)
 	}()
 
-	received := <-local.ReadC()
+	received := <-local.EventChan()
 	if bytes.Compare(received, ref) != 0 {
 		t.Fatal("received msg expected to be '" + string(ref) + "' but got '" + string(received) + "' instead.")
 	}
