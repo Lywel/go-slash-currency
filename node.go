@@ -120,7 +120,7 @@ func (n *Node) Gossip(manager nodeManager, payload []byte) {
 
 	for addr, conn := range n.remoteNodes {
 		if manager.IsInteressted(addr) {
-			cached, hasCache := n.recentMessages.Get(addr)
+			cached, hasCache := n.recentMessages.Get(addr.String())
 			var recentMsgs *lru.ARCCache
 			if hasCache {
 				recentMsgs, _ = cached.(*lru.ARCCache)
@@ -134,7 +134,7 @@ func (n *Node) Gossip(manager nodeManager, payload []byte) {
 			}
 
 			recentMsgs.Add(hash, true)
-			n.recentMessages.Add(addr, recentMsgs)
+			n.recentMessages.Add(addr.String(), recentMsgs)
 
 			if _, err := conn.Write(payload); err != nil {
 				log.Printf("%s->%s error: %v", n.localAddr, addr, err)
