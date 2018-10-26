@@ -42,8 +42,9 @@ func (netMan) IsInteressted(net.Addr) bool {
 
 func TestBroadcast(t *testing.T) {
 	var local, remote *gossipnet.Node
-	local = gossipnet.New("localhost:3000", []string{})
-	remote = gossipnet.New("localhost:3001", []string{":3000"})
+	localAddr := "127.0.0.1:3000"
+	local = gossipnet.New(localAddr, []string{})
+	remote = gossipnet.New("127.0.0.1:3001", []string{":3000"})
 
 	if err := local.Start(); err != nil {
 		t.Fatal(err)
@@ -61,8 +62,18 @@ func TestBroadcast(t *testing.T) {
 		remote.Broadcast(ref)
 	}()
 
-	received := <-local.EventChan()
-	if bytes.Compare(received, ref) != 0 {
-		t.Fatal("received msg expected to be '" + string(ref) + "' but got '" + string(received) + "' instead.")
+	event := <-local.EventChan()
+	switch event.(type) {
+	case gossipnet.DataEvent:
+		dataEvent := event.(gossipnet.DataEvent)
+		if bytes.Compare(dataEvent.Data, ref) != 0 {
+			t.Fatal("received msg expected to be '" + string(ref) + "' but got '" + string(dataEvent.Data) + "' instead.")
+		}
+	case gossipnet.ListenEvent:
+		listenEvent := event.(gossipnet.ListenEvent)
+		if listenEvent.Addr != localAddr {
+			t.Fatal("listening addr expected to be '" + string(localAddr) + "' but got '" + string(listenEvent.Addr) + "' instead.")
+		}
+	default:
 	}
 }

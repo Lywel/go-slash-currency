@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"github.com/hashicorp/golang-lru"
 	"io"
-	"log"
 	"net"
 )
 
 const (
-	inmemoryPeers    = 40
-	inmemoryMessages = 1024
+	inmemoryPeers          = 40
+	inmemoryMessages       = 1024
+	eventChannelBufferSize = 256
 )
 
 // Node is the local Node
@@ -21,7 +21,7 @@ type Node struct {
 	ln             net.Listener
 	running        bool
 	remoteNodes    map[net.Addr]net.Conn
-	readC          chan []byte
+	eventChan      chan Event
 	recentMessages *lru.ARCCache // the cache of peer's messages
 	knownMessages  *lru.ARCCache // the cache of self messages
 }
@@ -36,15 +36,24 @@ func New(localAddr string, remoteAddrs []string) *Node {
 		remoteAddrs:    remoteAddrs,
 		running:        false,
 		remoteNodes:    make(map[net.Addr]net.Conn),
-		readC:          make(chan []byte, 128),
+		eventChan:      make(chan Event, eventChannelBufferSize),
 		recentMessages: recentMessages,
 		knownMessages:  knownMessages,
+	}
+}
+
+func (n *Node) emit(event Event) {
+	// protection against blocking channel
+	select {
+	case n.eventChan <- event:
+	default:
 	}
 }
 
 // Save the new remote node
 func (n *Node) registerRemote(conn net.Conn) {
 	n.remoteNodes[conn.RemoteAddr()] = conn
+	n.emit(ConnOpenEvent{conn.RemoteAddr().String()})
 	defer conn.Close()
 	defer delete(n.remoteNodes, conn.RemoteAddr())
 
@@ -59,10 +68,11 @@ func (n *Node) registerRemote(conn net.Conn) {
 			continue
 		case io.EOF:
 		default:
-			log.Print(err)
+			n.emit(ErrorEvent{err})
 		}
 		break
 	}
+	n.emit(ConnCloseEvent{conn.RemoteAddr().String()})
 }
 
 func (n *Node) handleData(addr string, payload []byte) {
@@ -75,12 +85,7 @@ func (n *Node) handleData(addr string, payload []byte) {
 	n.knownMessages.Add(hash, true)
 
 	n.Gossip(payload)
-
-	// protection against blocking channel
-	select {
-	case n.readC <- payload:
-	default:
-	}
+	n.emit(DataEvent{payload})
 }
 
 func (n *Node) cacheEventFor(addr string, hash [32]byte) (alreadyKnew bool) {
@@ -98,8 +103,8 @@ func (n *Node) cacheEventFor(addr string, hash [32]byte) (alreadyKnew bool) {
 }
 
 // EventChan returns a readonly chanel for data events
-func (n *Node) EventChan() <-chan []byte {
-	return n.readC
+func (n *Node) EventChan() <-chan Event {
+	return n.eventChan
 }
 
 // Gossip sends a Message to all peers passing selection (except self)
@@ -128,7 +133,7 @@ func (n *Node) Start() error {
 	for _, addr := range n.remoteAddrs {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
-			log.Printf("%s->%s error: %v", n.localAddr, addr, err)
+			n.emit(ErrorEvent{err})
 			continue
 		}
 		go n.registerRemote(conn)
@@ -138,13 +143,14 @@ func (n *Node) Start() error {
 	if n.ln, err = net.Listen("tcp", n.localAddr); err != nil {
 		return err
 	}
+	n.emit(ListenEvent{n.ln.Addr().String()})
 
 	go func() {
 		defer n.ln.Close()
 		for n.running {
 			conn, err := n.ln.Accept()
 			if err != nil {
-				log.Printf("%s error: %v", n.localAddr, err)
+				n.emit(ErrorEvent{err})
 				continue
 			}
 			go n.registerRemote(conn)
@@ -160,5 +166,7 @@ func (n *Node) Stop() {
 	n.ln.Close()
 	for _, conn := range n.remoteNodes {
 		conn.Close()
+		n.emit(ConnCloseEvent{conn.RemoteAddr().String()})
 	}
+	n.emit(CloseEvent{})
 }
