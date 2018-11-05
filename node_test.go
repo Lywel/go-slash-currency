@@ -2,7 +2,7 @@ package gossipnet_test
 
 import (
 	"bytes"
-	"github.com/Lywel/go-gossipnet"
+	"bitbucket.org/ventureslash/go-gossipnet"
 	"net"
 	"sync"
 	"testing"

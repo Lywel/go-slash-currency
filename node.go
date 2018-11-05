@@ -162,6 +162,9 @@ func (n *Node) Start() error {
 
 // Stop closes all connection and stops listening
 func (n *Node) Stop() {
+	if !n.running {
+		return
+	}
 	n.running = false
 	n.ln.Close()
 	for _, conn := range n.remoteNodes {
@@ -169,4 +172,5 @@ func (n *Node) Stop() {
 		n.emit(ConnCloseEvent{conn.RemoteAddr().String()})
 	}
 	n.emit(CloseEvent{})
+	close(n.eventChan)
 }
