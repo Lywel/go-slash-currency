@@ -1,32 +1,22 @@
-package network
+package events
 
 import (
 	"bitbucket.org/ventureslash/go-gossipnet"
-	"bitbucket.org/ventureslash/go-ibft/consensus"
-	"bitbucket.org/ventureslash/go-ibft/events"
+	"bitbucket.org/ventureslash/go-ibft/core"
 	"github.com/ethereum/go-ethereum/rlp"
 	"log"
 )
 
 // Manager handles data from the network
 type Manager struct {
-	node   *gossipnet.Node
-	events events.Handler
+	node      *gossipnet.Node
+	eventsOut chan core.Event
+	eventsIn  chan core.Event
 }
 
 type networkMessage struct {
 	Type uint
 	Data []byte
-}
-
-// MessageEvent is emmitted during the IBFT consensus algo
-type MessageEvent struct {
-	Payload []byte
-}
-
-// JoinEvent is emmitted when a peer joins the network
-type JoinEvent struct {
-	Address consensus.Address
 }
 
 const (
@@ -38,31 +28,35 @@ const (
 )
 
 // New returns a new network.Manager
-func New(node *gossipnet.Node, events events.Handler) Manager {
+func New(node *gossipnet.Node, eventsIn, eventsOut chan core.Event) Manager {
 	return Manager{
-		node:   node,
-		events: events,
+		node:      node,
+		eventsIn:  eventsIn,
+		eventsOut: eventsOut,
 	}
 }
 
 // Start Broadcast core address and starts to listen on node.EventChan()
-func (mngr Manager) Start(addr consensus.Address) {
-	addrBytes := addr.GetBytes()
-	joinBytes, err := rlp.EncodeToBytes(networkMessage{
-		Type: joinEvent,
-		Data: addrBytes[:],
-	})
-	if err != nil {
-		log.Print("encode error: ", err)
-	}
+func (mngr Manager) Start() {
+	/*
+		addrBytes := addr.GetBytes()
+		joinBytes, err := rlp.EncodeToBytes(networkMessage{
+			Type: joinEvent,
+			Data: addrBytes[:],
+		})
+		if err != nil {
+			log.Print("encode error: ", err)
+		}
+	*/
 
+	// Dispatch network events to IBFT
 	go func() {
 		for event := range mngr.node.EventChan() {
 			switch ev := event.(type) {
 			case gossipnet.ConnOpenEvent:
 				log.Print("ConnOpenEvent")
 				// TODO: dont gossip to everyone, just the new connection
-				mngr.node.Gossip(joinBytes)
+				mngr.node.Gossip([]byte("Slt c mon address :)"))
 			case gossipnet.ConnCloseEvent:
 				log.Print("ConnCloseEvent")
 			case gossipnet.DataEvent:
@@ -76,18 +70,18 @@ func (mngr Manager) Start(addr consensus.Address) {
 				switch msg.Type {
 				case messageEvent:
 					log.Print(" -MsgEvent")
-					mngr.events.Push(MessageEvent{
+					mngr.eventsIn <- core.MessageEvent{
 						Payload: msg.Data,
-					})
+					}
 				case joinEvent:
 					log.Print(" -JoinEvent")
-					evt := JoinEvent{}
+					evt := core.JoinEvent{}
 					evt.Address.FromBytes(msg.Data)
 					if err != nil {
 						log.Print(err)
 						continue
 					}
-					mngr.events.Push(evt)
+					mngr.eventsIn <- evt
 				case stateEvent:
 					log.Print(" -StateEvent")
 
@@ -96,8 +90,18 @@ func (mngr Manager) Start(addr consensus.Address) {
 				log.Print("ListenEvent")
 			case gossipnet.CloseEvent:
 				log.Print("CloseEvent")
-				mngr.events.Close()
+				close(mngr.eventsIn)
 				break
+			}
+		}
+	}()
+
+	// Dispatch IBFT events to the network
+	go func() {
+		for event := range mngr.eventsOut {
+			switch ev := event.(type) {
+			case core.MessageEvent:
+				mngr.broadcast(ev.Payload)
 			}
 		}
 	}()
@@ -105,7 +109,7 @@ func (mngr Manager) Start(addr consensus.Address) {
 
 // Broadcast implements network.Manager.Broadcast. It will tag the payload
 // forward it to the network node
-func (mngr Manager) Broadcast(payload []byte) (err error) {
+func (mngr Manager) broadcast(payload []byte) (err error) {
 	data, err := rlp.EncodeToBytes(networkMessage{
 		Type: messageEvent,
 		Data: payload,

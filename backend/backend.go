@@ -1,21 +1,22 @@
 package backend
 
 import (
-	"crypto/ecdsa"
 	"bitbucket.org/ventureslash/go-gossipnet"
-	"bitbucket.org/ventureslash/go-ibft/consensus"
-	"bitbucket.org/ventureslash/go-ibft/consensus/backend/crypto"
-	"bitbucket.org/ventureslash/go-ibft/consensus/core"
+	"bitbucket.org/ventureslash/go-ibft"
+	"bitbucket.org/ventureslash/go-ibft/core"
+	"bitbucket.org/ventureslash/go-slash-currency/events"
+	"crypto/ecdsa"
 )
 
 // Backend initializes the core, holds the keys and currenncy logic
-type backend struct {
-	privateKey  *ecdsa.PrivateKey
-	address     consensus.Address
-	network     *gossipnet.Node
-	core        consensus.Engine
-	coreRunning bool
-	valSet      *consensus.ValidatorSet
+type Backend struct {
+	privateKey    *ecdsa.PrivateKey
+	network       *gossipnet.Node
+	core          ibft.Engine
+	coreRunning   bool
+	ibftEventsIn  chan core.Event
+	ibftEventsOut chan core.Event
+	manager       events.Manager
 }
 
 // Config is the backend configuration struct
@@ -25,45 +26,41 @@ type Config struct {
 }
 
 // New returns a new Backend
-func New(config *Config, privateKey *ecdsa.PrivateKey) consensus.Backend {
+func New(config *Config, privateKey *ecdsa.PrivateKey) *Backend {
 	network := gossipnet.New(config.LocalAddr, config.RemoteAddrs)
-	address := crypto.PubkeyToAddress(privateKey.PublicKey)
+	in := make(chan core.Event, 256)
+	out := make(chan core.Event, 256)
 
-	backend := &backend{
-		privateKey: privateKey,
-		address:    address,
-		network:    network,
-		valSet:     consensus.NewSet([]consensus.Address{address}),
+	backend := &Backend{
+		privateKey:    privateKey,
+		network:       network,
+		ibftEventsIn:  in,
+		ibftEventsOut: out,
+		manager:       events.New(network, in, out),
 	}
 
 	backend.core = core.New(backend)
 	return backend
 }
 
-func (b *backend) Address() consensus.Address {
-	return b.address
-}
-
-func (b *backend) Network() *gossipnet.Node {
-	return b.network
-}
-
-func (b *backend) AddValidator(addr consensus.Address) bool {
-	return b.valSet.AddValidator(addr)
+// PrivateKey returns the private key
+func (b *Backend) PrivateKey() *ecdsa.PrivateKey {
+	return b.privateKey
 }
 
 // Start implements Engine.Start
-func (b *backend) Start() {
+func (b *Backend) Start() {
 	if b.coreRunning {
 		return
 	}
+	b.manager.Start()
 	b.network.Start()
 	b.core.Start()
 	b.coreRunning = true
 }
 
 // Stop implements Engine.Stop
-func (b *backend) Stop() {
+func (b *Backend) Stop() {
 	if !b.coreRunning {
 		return
 	}
@@ -72,7 +69,21 @@ func (b *backend) Stop() {
 	b.coreRunning = false
 }
 
-// Sign implements Backend.Sign
-func (b *backend) Sign(data []byte) ([]byte, error) {
-	return crypto.Sign(data, b.privateKey)
+// EventsInChan returns a channel receiving network events
+func (b *Backend) EventsInChan() chan core.Event {
+	return b.ibftEventsIn
 }
+
+// EventsOutChan returns a channel used to emit events to the network
+func (b *Backend) EventsOutChan() chan core.Event {
+	return b.ibftEventsOut
+}
+
+// DecodeProposal parses a payload and return a Proposal interface
+func (b *Backend) DecodeProposal(data []byte) ibft.Proposal { return nil }
+
+// Verify returns an error is a proposal should be rejected
+func (b *Backend) Verify(proposal ibft.Proposal) error { return nil }
+
+// Commit is called by an IBFT algorythm when a Proposal is accepted
+func (b *Backend) Commit(proposal ibft.Proposal) error { return nil }
