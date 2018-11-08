@@ -8,9 +8,16 @@ import (
 	"math/big"
 )
 
+
 type Block struct {
 	number *big.Int
 	data   string
+}
+
+// "external" block encoding. used for eth protocol, etc.
+type extblock struct {
+	Number *big.Int
+	Data   string
 }
 
 // NewBlock create a new bock
@@ -42,3 +49,23 @@ func (b *Block) Number() *big.Int {
 func (b *Block) String() string {
 	return fmt.Sprintf("number %d, data %s", b.number, b.data)
 }
+
+func (b *Block) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extblock{
+		Number: b.number,
+		Data:   b.data,
+	})
+}
+
+// DecodeRLP implements rlp.Decoder, and load the consensus fields from a RLP stream.
+func (b *Block) DecodeRLP(s *rlp.Stream) error {
+	var eb extblock
+
+	if err := s.Decode(&eb); err != nil {
+		return err
+	}
+	b.number, b.data = eb.Number, eb.Data
+
+	return nil
+}
+
