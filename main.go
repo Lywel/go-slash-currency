@@ -17,7 +17,7 @@ func main() {
 	}
 
 	backend := backend.New(&backend.Config{
-		LocalAddr:   "0.0.0.0:8081",
+		LocalAddr:   "0.0.0.0:8080",
 		RemoteAddrs: os.Args[1:],
 	}, privkey)
 

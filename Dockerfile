@@ -12,10 +12,10 @@ RUN mkdir -p /root/.ssh && \
     echo "${SSH_KEY}" > /root/.ssh/id_rsa && \
     chmod 600 /root/.ssh/id_rsa && \
     git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/" && \
-    GOOS=linux go build -a -installsuffix cgo -ldflags "-linkmode external -extldflags -static"
+    GOOS=linux go build -a -installsuffix cgo -ldflags "-linkmode external -extldflags -static" -o app
 
 FROM scratch
 EXPOSE 8080
-COPY --from=builder /go-modules/go-ibft /go-ibft
-ENTRYPOINT ["/go-ibft"]
+COPY --from=builder /go-modules/app app
+ENTRYPOINT ["/app"]
 
