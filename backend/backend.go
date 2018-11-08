@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/ventureslash/go-gossipnet"
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/core"
+	"bitbucket.org/ventureslash/go-ibft/crypto"
 	"bitbucket.org/ventureslash/go-slash-currency/events"
 	"crypto/ecdsa"
 )
@@ -11,6 +12,7 @@ import (
 // Backend initializes the core, holds the keys and currenncy logic
 type Backend struct {
 	privateKey    *ecdsa.PrivateKey
+	address       ibft.Address
 	network       *gossipnet.Node
 	core          ibft.Engine
 	coreRunning   bool
@@ -33,6 +35,7 @@ func New(config *Config, privateKey *ecdsa.PrivateKey) *Backend {
 
 	backend := &Backend{
 		privateKey:    privateKey,
+		address:       crypto.PubkeyToAddress(privateKey.PublicKey),
 		network:       network,
 		ibftEventsIn:  in,
 		ibftEventsOut: out,
@@ -53,7 +56,7 @@ func (b *Backend) Start() {
 	if b.coreRunning {
 		return
 	}
-	b.manager.Start()
+	b.manager.Start(b.address)
 	b.network.Start()
 	b.core.Start()
 	b.coreRunning = true

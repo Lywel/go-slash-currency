@@ -2,6 +2,7 @@ package events
 
 import (
 	"bitbucket.org/ventureslash/go-gossipnet"
+	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"github.com/ethereum/go-ethereum/rlp"
 	"log"
@@ -37,17 +38,15 @@ func New(node *gossipnet.Node, eventsIn, eventsOut chan core.Event) Manager {
 }
 
 // Start Broadcast core address and starts to listen on node.EventChan()
-func (mngr Manager) Start() {
-	/*
-		addrBytes := addr.GetBytes()
-		joinBytes, err := rlp.EncodeToBytes(networkMessage{
-			Type: joinEvent,
-			Data: addrBytes[:],
-		})
-		if err != nil {
-			log.Print("encode error: ", err)
-		}
-	*/
+func (mngr Manager) Start(addr ibft.Address) {
+	addrBytes := addr.GetBytes()
+	joinBytes, err := rlp.EncodeToBytes(networkMessage{
+		Type: joinEvent,
+		Data: addrBytes[:],
+	})
+	if err != nil {
+		log.Print("encode error: ", err)
+	}
 
 	// Dispatch network events to IBFT
 	go func() {
@@ -56,7 +55,7 @@ func (mngr Manager) Start() {
 			case gossipnet.ConnOpenEvent:
 				log.Print("ConnOpenEvent")
 				// TODO: dont gossip to everyone, just the new connection
-				mngr.node.Gossip([]byte("Slt c mon address :)"))
+				mngr.node.Gossip(joinBytes)
 			case gossipnet.ConnCloseEvent:
 				log.Print("ConnCloseEvent")
 			case gossipnet.DataEvent:
