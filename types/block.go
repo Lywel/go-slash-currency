@@ -5,10 +5,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
+	"io"
 	"math/big"
 )
 
-
+// Block is used to build the blockchain
 type Block struct {
 	number *big.Int
 	data   string
@@ -28,6 +29,7 @@ func NewBlock(number *big.Int, data string) *Block {
 	}
 }
 
+// RlpHash TODO
 func RlpHash(x interface{}) []byte {
 	var h common.Hash
 	hw := sha3.NewKeccak256()
@@ -50,6 +52,7 @@ func (b *Block) String() string {
 	return fmt.Sprintf("number %d, data %s", b.number, b.data)
 }
 
+// EncodeRLP TODO
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Number: b.number,
@@ -68,4 +71,3 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 
 	return nil
 }
-

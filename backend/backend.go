@@ -6,7 +6,9 @@ import (
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-ibft/crypto"
 	"bitbucket.org/ventureslash/go-slash-currency/events"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"crypto/ecdsa"
+	"errors"
 )
 
 // Backend initializes the core, holds the keys and currenncy logic
@@ -83,7 +85,18 @@ func (b *Backend) EventsOutChan() chan core.Event {
 }
 
 // DecodeProposal parses a payload and return a Proposal interface
-func (b *Backend) DecodeProposal(data []byte) ibft.Proposal { return nil }
+func (b *Backend) DecodeProposal(prop interface{}) (ibft.Proposal, error) {
+	switch proposal := prop.(type) {
+	case *types.Block:
+		return proposal, nil
+		/*
+			case type.Transactiono:
+				return proposal
+		*/
+	default:
+		return nil, errors.New("Unknown proposal type")
+	}
+}
 
 // Verify returns an error is a proposal should be rejected
 func (b *Backend) Verify(proposal ibft.Proposal) error { return nil }
