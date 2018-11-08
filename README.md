@@ -24,8 +24,8 @@ ssh-add -K ~/.ssh/id_rsa
 cat ~/.ssh/id_rsa.pub
 ```
 
-Then go to your [Account Setting](https://bitbucket.org/account) > SSH keys
-> Add key. And paste the public key you copied previously. Now you can use ssh
+Then go to your [Account Setting](https://bitbucket.org/account) > SSH keys >
+Add key. And paste the public key you copied previously. Now you can use ssh
 to clone repositories without typing a password.
 
 [Read more](https://confluence.atlassian.com/bitbucketserver/using-ssh-keys-to-secure-git-operations-776639772.html) about ssh configuration on bitbucket.
