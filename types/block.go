@@ -2,11 +2,13 @@ package types
 
 import (
 	"fmt"
+	"io"
+	"math/big"
+
+	"bitbucket.org/ventureslash/go-ibft"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
-	"io"
-	"math/big"
 )
 
 // Block is used to build the blockchain
@@ -54,9 +56,17 @@ func (b *Block) String() string {
 
 // EncodeRLP TODO
 func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, extblock{
+	ext := extblock{
 		Number: b.number,
 		Data:   b.data,
+	}
+	propToBytes, err := rlp.EncodeToBytes(ext)
+	if err != nil {
+		return err
+	}
+	return rlp.Encode(w, ibft.EncodedProposal{
+		Type: 1,
+		Prop: propToBytes,
 	})
 }
 

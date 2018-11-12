@@ -1,14 +1,16 @@
 package backend
 
 import (
+	"crypto/ecdsa"
+	"errors"
+
 	"bitbucket.org/ventureslash/go-gossipnet"
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-ibft/crypto"
 	"bitbucket.org/ventureslash/go-slash-currency/events"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"crypto/ecdsa"
-	"errors"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Backend initializes the core, holds the keys and currenncy logic
@@ -85,10 +87,15 @@ func (b *Backend) EventsOutChan() chan core.Event {
 }
 
 // DecodeProposal parses a payload and return a Proposal interface
-func (b *Backend) DecodeProposal(prop interface{}) (ibft.Proposal, error) {
-	switch proposal := prop.(type) {
-	case *types.Block:
-		return proposal, nil
+func (b *Backend) DecodeProposal(prop *ibft.EncodedProposal) (ibft.Proposal, error) {
+	switch prop.Type {
+	case 1:
+		var b *types.Block
+		err := rlp.DecodeBytes(prop.Prop, &b)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
 		/*
 			case type.Transactiono:
 				return proposal
