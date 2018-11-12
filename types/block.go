@@ -65,7 +65,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		return err
 	}
 	return rlp.Encode(w, ibft.EncodedProposal{
-		Type: 1,
+		Type: TypeBlock,
 		Prop: propToBytes,
 	})
 }

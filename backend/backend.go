@@ -89,7 +89,7 @@ func (b *Backend) EventsOutChan() chan core.Event {
 // DecodeProposal parses a payload and return a Proposal interface
 func (b *Backend) DecodeProposal(prop *ibft.EncodedProposal) (ibft.Proposal, error) {
 	switch prop.Type {
-	case 1:
+	case types.TypeBlock:
 		var b *types.Block
 		err := rlp.DecodeBytes(prop.Prop, &b)
 		if err != nil {
