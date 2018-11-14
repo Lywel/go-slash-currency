@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"bitbucket.org/ventureslash/go-slash-currency/currency"
 	"bitbucket.org/ventureslash/go-ibft/backend"
+	"bitbucket.org/ventureslash/go-slash-currency/currency"
 
 	eth "github.com/ethereum/go-ethereum/crypto"
 )
@@ -21,9 +21,11 @@ func main() {
 
 	currency := &currency.Currency{}
 	backend := backend.New(&backend.Config{
-    LocalAddr:   ":" + os.Getenv("PORT"),
+		LocalAddr:   ":" + os.Getenv("PORT"),
 		RemoteAddrs: os.Args[1:],
 	}, privkey, currency)
+
+	log.Print("configured to run on port: " + os.Getenv("PORT"))
 
 	backend.Start()
 	defer backend.Stop()
