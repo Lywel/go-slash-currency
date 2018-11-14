@@ -1,0 +1,13 @@
+image: golang:latest
+
+pipelines:
+  default:
+    - step:
+        script:
+          - go build -v -o app
+    - step:
+        services:
+          - docker
+        script:
+          - export IMAGE_NAME=slash/validator-node:$BITBUCKET_COMMIT
+          - docker build -t $IMAGE_NAME -f Dockerfile.scratch .

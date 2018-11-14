@@ -17,9 +17,10 @@ func main() {
 	}
 
 	backend := backend.New(&backend.Config{
-		LocalAddr:   "0.0.0.0:8080",
+		LocalAddr:   ":" + os.Getenv("PORT"),
 		RemoteAddrs: os.Args[1:],
 	}, privkey)
+	log.Print("running on port: " + os.Getenv("PORT"))
 
 	backend.Start()
 	defer backend.Stop()
