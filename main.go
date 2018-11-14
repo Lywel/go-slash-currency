@@ -21,7 +21,7 @@ func main() {
 
 	currency := &currency.Currency{}
 	backend := backend.New(&backend.Config{
-		LocalAddr:   "0.0.0.0:8080",
+    LocalAddr:   ":" + os.Getenv("PORT"),
 		RemoteAddrs: os.Args[1:],
 	}, privkey, currency)
 
