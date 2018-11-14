@@ -3,12 +3,10 @@ image: golang:latest
 pipelines:
   default:
     - step:
-        script:
-          - git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/"
-          - go build -v -o app
-    - step:
         services:
           - docker
         script:
+          - git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/"
+          - go build -v -o app
           - export IMAGE_NAME=slash/validator-node:$BITBUCKET_COMMIT
           - docker build -t $IMAGE_NAME -f Dockerfile.scratch .
