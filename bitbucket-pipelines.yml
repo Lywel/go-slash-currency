@@ -17,12 +17,11 @@ pipelines:
         script:
           # 1) Define variables
           - export BUILD_ID=$BITBUCKET_BRANCH_$BITBUCKET_COMMIT_$BITBUCKET_BUILD_NUMBER
-          - export IMAGE_TAG=$AWS_REGISTRY_URL/$KUBE_APP_NAME:$BUILD_ID
+          - export IMAGE_TAG=$AWS_REGISTRY_URL/$BITBUCKET_REPO_SLUG:$BUILD_ID
           # 2) Build the docker container
           - docker build -t $IMAGE_TAG -f Dockerfile.scratch .
           # 3) AWS login
           - eval $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
-          # Manual: ws ecr create-repository --repository-name $KUBE_APP_NAME
           # - aws ecr create-repository --repository-name $BITBUCKET_REPO_SLUG 2>/dev/null
           # 4) Push image to aws docker registry
           - docker push $IMAGE_TAG
@@ -32,12 +31,12 @@ pipelines:
         script:
           # 1) Define variables
           - export BUILD_ID=$BITBUCKET_BRANCH_$BITBUCKET_COMMIT_$BITBUCKET_BUILD_NUMBER
-          - export IMAGE_TAG=$AWS_REGISTRY_URL/$KUBE_APP_NAME:$BUILD_ID
+          - export IMAGE_TAG=$AWS_REGISTRY_URL/$BITBUCKET_REPO_SLUG:$BUILD_ID
           # 2) Configure kubectl
           - kubectl config set-cluster $KUBE_CLUSTER_NAME --insecure-skip-tls-verify=true --server=$KUBE_CLUSTER_HOST
           - kubectl config set-credentials $KUBE_CLUSTER_USER --username=$KUBERNETES_USERNAME --password=$KUBERNETES_PASSWORD
           - kubectl config set-context $KUBE_CONTEXT --cluster=$KUBE_CLUSTER_NAME --user=$KUBE_CLUSTER_USER
           - kubectl config use-context $KUBE_CONTEXT
           # 3) Update the deployment to use the new Docker image
-          - kubectl set image deployment/$KUBE_APP_NAME $KUBE_APP_NAME=$IMAGE_TAG
-          - kubectl rollout status deployment/$KUBE_APP_NAME
+          - kubectl set image deployment/$BITBUCKET_REPO_SLUG $BITBUCKET_REPO_SLUG=$IMAGE_TAG
+          - kubectl rollout status deployment/$BITBUCKET_REPO_SLUG
