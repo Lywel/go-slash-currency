@@ -4,6 +4,7 @@ pipelines:
   default:
     - step:
         script:
+          - git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/"
           - go build -v -o app
     - step:
         services:
