@@ -1,13 +1,16 @@
 package main
 
 import (
-	"bitbucket.org/ventureslash/go-slash-currency/backend"
 	"crypto/ecdsa"
 	"crypto/rand"
-	eth "github.com/ethereum/go-ethereum/crypto"
 	"log"
 	"os"
 	"time"
+
+	"bitbucket.org/ventureslash/go-slash-currency/currency"
+	"bitbucket.org/ventureslash/go-ibft/backend"
+
+	eth "github.com/ethereum/go-ethereum/crypto"
 )
 
 func main() {
@@ -16,10 +19,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	currency := &currency.Currency{}
 	backend := backend.New(&backend.Config{
 		LocalAddr:   "0.0.0.0:8080",
 		RemoteAddrs: os.Args[1:],
-	}, privkey)
+	}, privkey, currency)
 
 	backend.Start()
 	defer backend.Stop()
