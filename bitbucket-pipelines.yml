@@ -5,7 +5,8 @@ pipelines:
         image: golang:latest
         script:
           - git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/"
-          - go build -v -o app
+          - export GOOS=linux
+          - go build -v -a -installsuffix cgo -ldflags "-linkmode external -extldflags -static" -o app
           - go test -v
         artifacts:
           - app
