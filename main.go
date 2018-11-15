@@ -21,17 +21,32 @@ func main() {
 	currency := &currency.Currency{}
 	endpoint := endpoint.New()
 	backend := backend.New(&backend.Config{
-		LocalAddr:   ":" + os.Getenv("PORT"),
+		LocalAddr:   ":" + os.Getenv("VAL_PORT"),
 		RemoteAddrs: os.Args[1:],
 	}, privkey, currency, func(in, out chan core.Event) (pin, pout chan core.Event) {
-		pin, pout = in, out
+		pin = make(chan core.Event, 256)
+		pout = make(chan core.Event, 256)
+		go func() {
+			for i := range pin {
+				log.Printf("EVENT pin -> in: %T", i)
+				in <- i
+			}
+			close(in)
+		}()
+		go func() {
+			for o := range out {
+				log.Printf("EVENT out -> pout: %T", o)
+				pout <- o
+			}
+			close(pout)
+		}()
 		return
 	})
 
-	log.Print("configured to run on port: " + os.Getenv("PORT"))
+	log.Print("configured to run on port: " + os.Getenv("VAL_PORT"))
 
 	backend.Start()
 	defer backend.Stop()
 
-	endpoint.Start(":3000")
+	endpoint.Start(":" + os.Getenv("EP_PORT"))
 }
