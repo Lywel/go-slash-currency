@@ -3,10 +3,10 @@ package endpoint
 const (
 	inboundDir uint = iota
 	outboundDir
+	other
 )
 
-type ibftEvent struct {
-	Direction uint   `json:"direction"`
-	Type      string `json:"type"`
-	Data      []byte `json:"data"`
+type message struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
 }

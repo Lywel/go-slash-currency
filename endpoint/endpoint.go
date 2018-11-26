@@ -1,10 +1,11 @@
 package endpoint
 
 import (
+	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"log"
 	"net/http"
-	"reflect"
+	//	"reflect"
 )
 
 // Endpoint maintains the set of active clients and broadcasts messages to the
@@ -12,24 +13,24 @@ import (
 type Endpoint struct {
 	// Registered clients.
 	clients map[*Client]bool
-
 	// Inbound messages from the clients.
 	broadcast chan interface{}
-
 	// Register requests from the clients.
 	register chan *Client
-
 	// Unregister requests from clients.
 	unregister chan *Client
+	// A function that returns a mapping of connected clients
+	networkMapGetter func() map[ibft.Address]string
 }
 
 // New returns a new endpoint
 func New() *Endpoint {
 	ep := &Endpoint{
-		broadcast:  make(chan interface{}),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		broadcast:        make(chan interface{}),
+		register:         make(chan *Client),
+		unregister:       make(chan *Client),
+		clients:          make(map[*Client]bool),
+		networkMapGetter: nil,
 	}
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +38,10 @@ func New() *Endpoint {
 	})
 
 	return ep
+}
+
+func (ep *Endpoint) SetNetworkMapGetter(networkMapGetter func() map[ibft.Address]string) {
+	ep.networkMapGetter = networkMapGetter
 }
 
 func (ep *Endpoint) run() {
@@ -72,6 +77,33 @@ func (ep *Endpoint) Start(addr string) {
 	}
 }
 
+func (ep *Endpoint) handleMsg(msg *message, cli *Client) {
+	log.Printf("Received client req: %s", msg.Type)
+	switch msg.Type {
+	case "network-state":
+		if ep.networkMapGetter == nil {
+			cli.send <- message{
+				Type: "error",
+				Data: "Network getter is not configured on this server: nil",
+			}
+			return
+		}
+		network := ep.networkMapGetter()
+
+		netmap := make(map[string]string)
+
+		for k, v := range network {
+			netmap[k.String()] = v
+		}
+
+		cli.send <- message{
+			Type: "network-state",
+			Data: netmap,
+		}
+
+	}
+}
+
 // EventProxy returns a directional channel proxy that forwards core.Event.
 // Events are not modified and forwarded as is, this way:
 //	in, pout <- pin, out
@@ -81,10 +113,9 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 		pout = make(chan core.Event, 256)
 		go func() {
 			for i := range pin {
-				ep.broadcast <- ibftEvent{
-					Direction: inboundDir,
-					Type:      reflect.TypeOf(i).String(),
-					Data:      nil,
+				ep.broadcast <- message{
+					Type: "ibftEventIn",
+					Data: i,
 				}
 				in <- i
 			}
@@ -92,10 +123,10 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 		}()
 		go func() {
 			for o := range out {
-				ep.broadcast <- ibftEvent{
-					Direction: outboundDir,
-					Type:      reflect.TypeOf(o).String(),
-					Data:      nil,
+				ep.broadcast <- message{
+					Type: "ibftEventOut",
+					Data: o,
+					//Type: reflect.TypeOf(o).String(),
 				}
 				pout <- o
 			}

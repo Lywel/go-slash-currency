@@ -1,6 +1,7 @@
 package endpoint
 
 import (
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -51,14 +52,23 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, msgBytes, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		c.ep.broadcast <- message
+		// Parse the message (client request)
+		log.Printf("msg: %s", msgBytes)
+		var msg message
+		err = json.Unmarshal(msgBytes, &msg)
+		if err != nil {
+			log.Println("Invalid json received:", err)
+		}
+
+		c.ep.handleMsg(&msg, c)
+		//c.ep.broadcast <- message
 	}
 }
 
@@ -82,6 +92,12 @@ func (c *Client) writePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
+
+			s, err := json.Marshal(message)
+			if err != nil {
+				log.Printf("json error: %v", err)
+			}
+			log.Printf("sending json: %s", s)
 
 			c.conn.WriteJSON(message)
 			// Add queued chat messages to the current websocket message.
@@ -109,10 +125,9 @@ func serveWs(ep *Endpoint, w http.ResponseWriter, r *http.Request) {
 	client := &Client{ep: ep, conn: conn, send: make(chan interface{}, 256)}
 	client.ep.register <- client
 
-	client.send <- ibftEvent{
-		Direction: inboundDir,
-		Type:      "Connected",
-		Data:      nil,
+	client.send <- message{
+		Type: "connection",
+		Data: "connected",
 	}
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

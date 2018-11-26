@@ -23,6 +23,7 @@ func main() {
 		LocalAddr:   ":" + os.Getenv("VAL_PORT"),
 		RemoteAddrs: os.Args[1:],
 	}, privkey, currency, endpoint.EventProxy())
+	endpoint.SetNetworkMapGetter(backend.Network)
 
 	log.Print("configured to run on port: " + os.Getenv("VAL_PORT"))
 
