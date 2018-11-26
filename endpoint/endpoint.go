@@ -5,7 +5,7 @@ import (
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"log"
 	"net/http"
-	//	"reflect"
+	"reflect"
 )
 
 // Endpoint maintains the set of active clients and broadcasts messages to the
@@ -114,8 +114,9 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 		go func() {
 			for i := range pin {
 				ep.broadcast <- message{
-					Type: "ibftEventIn",
-					Data: i,
+					Type:     "ibftEventIn",
+					Data:     i,
+					DataType: reflect.TypeOf(i).String(),
 				}
 				in <- i
 			}
@@ -124,9 +125,9 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 		go func() {
 			for o := range out {
 				ep.broadcast <- message{
-					Type: "ibftEventOut",
-					Data: o,
-					//Type: reflect.TypeOf(o).String(),
+					Type:     "ibftEventOut",
+					Data:     o,
+					DataType: reflect.TypeOf(o).String(),
 				}
 				pout <- o
 			}
