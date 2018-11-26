@@ -100,6 +100,7 @@ func (c *Client) writePump() {
 
 // serveWs handles websocket requests from the peer.
 func serveWs(ep *Endpoint, w http.ResponseWriter, r *http.Request) {
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -108,6 +109,11 @@ func serveWs(ep *Endpoint, w http.ResponseWriter, r *http.Request) {
 	client := &Client{ep: ep, conn: conn, send: make(chan interface{}, 256)}
 	client.ep.register <- client
 
+	client.send <- ibftEvent{
+		Direction: inboundDir,
+		Type:      "Connected",
+		Data:      nil,
+	}
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
 	go client.writePump()
