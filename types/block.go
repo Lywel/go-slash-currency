@@ -6,59 +6,53 @@ import (
 	"math/big"
 
 	"bitbucket.org/ventureslash/go-ibft"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type Header struct {
+	Number *big.Int
+	Time   *big.Int
+}
+
 // Block is used to build the blockchain
 type Block struct {
-	number *big.Int
-	data   string
+	header       *Header
+	transactions Transactions
 }
 
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
-	Number *big.Int
-	Data   string
+	Header       *Header
+	Transactions Transactions
 }
 
 // NewBlock create a new bock
-func NewBlock(number *big.Int, data string) *Block {
+func NewBlock(header *Header, transactions []*Transaction) *Block {
 	return &Block{
-		number: number,
-		data:   data,
+		header:       header,
+		transactions: transactions,
 	}
-}
-
-// RlpHash TODO
-func RlpHash(x interface{}) []byte {
-	var h common.Hash
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
-	return h.Bytes()
 }
 
 // Hash compute the hash of a block
 func (b *Block) Hash() []byte {
-	return RlpHash(b)
+	return RlpHash(b.header)
 }
 
 // Number return the number of a block
 func (b *Block) Number() *big.Int {
-	return b.number
+	return new(big.Int).Set(b.header.Number)
 }
 
 func (b *Block) String() string {
-	return fmt.Sprintf("number %d, data %s", b.number, b.data)
+	return fmt.Sprintf("number %d, data %s", b.Number())
 }
 
 // EncodeRLP TODO
 func (b *Block) EncodeRLP(w io.Writer) error {
 	ext := extblock{
-		Number: b.number,
-		Data:   b.data,
+		Header:       b.header,
+		Transactions: b.transactions,
 	}
 	propToBytes, err := rlp.EncodeToBytes(ext)
 	if err != nil {
@@ -77,7 +71,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.number, b.data = eb.Number, eb.Data
+	b.header, b.transactions = eb.Header, eb.Transactions
 
 	return nil
 }
