@@ -8,6 +8,6 @@ import (
 
 type Checkpoint struct {
 	BlockNumber       *big.Int
-	balances          map[ibft.Address]*big.Int
-	currentValidators *ibft.ValidatorSet
+	Balances          map[ibft.Address]*big.Int
+	CurrentValidators *ibft.ValidatorSet
 }
