@@ -10,14 +10,15 @@ import (
 )
 
 type Header struct {
-	Number *big.Int
-	Time   *big.Int
+	Number     *big.Int
+	Time       *big.Int
+	ParentHash []byte
 }
 
 // Block is used to build the blockchain
 type Block struct {
-	header       *Header
-	transactions Transactions
+	Header       *Header
+	Transactions Transactions
 }
 
 // "external" block encoding. used for eth protocol, etc.
@@ -29,19 +30,19 @@ type extblock struct {
 // NewBlock create a new bock
 func NewBlock(header *Header, transactions []*Transaction) *Block {
 	return &Block{
-		header:       header,
-		transactions: transactions,
+		Header:       header,
+		Transactions: transactions,
 	}
 }
 
 // Hash compute the hash of a block
 func (b *Block) Hash() []byte {
-	return RlpHash(b.header)
+	return RlpHash(b.Header)
 }
 
 // Number return the number of a block
 func (b *Block) Number() *big.Int {
-	return new(big.Int).Set(b.header.Number)
+	return new(big.Int).Set(b.Header.Number)
 }
 
 func (b *Block) String() string {
@@ -51,8 +52,8 @@ func (b *Block) String() string {
 // EncodeRLP TODO
 func (b *Block) EncodeRLP(w io.Writer) error {
 	ext := extblock{
-		Header:       b.header,
-		Transactions: b.transactions,
+		Header:       b.Header,
+		Transactions: b.Transactions,
 	}
 	propToBytes, err := rlp.EncodeToBytes(ext)
 	if err != nil {
@@ -71,7 +72,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.transactions = eb.Header, eb.Transactions
+	b.Header, b.Transactions = eb.Header, eb.Transactions
 
 	return nil
 }
