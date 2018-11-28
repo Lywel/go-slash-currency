@@ -10,6 +10,8 @@ import (
 
 // Currency initializes currency logic
 type Currency struct {
+	Blockchain  []*types.Block
+	Transaction []*types.Transaction
 }
 
 // DecodeProposal parses a payload and return a Proposal interface

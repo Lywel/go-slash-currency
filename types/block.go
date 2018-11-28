@@ -45,7 +45,7 @@ func (b *Block) Number() *big.Int {
 }
 
 func (b *Block) String() string {
-	return fmt.Sprintf("number %d, data %s", b.Number())
+	return fmt.Sprintf("number %d", b.Number())
 }
 
 // EncodeRLP TODO
