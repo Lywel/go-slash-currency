@@ -132,9 +132,8 @@ func (c *Currency) createBlock() {
 	}, c.transactions)
 	log.Print("mine block: ", block)
 
-	ibftOut := c.backend.EventsOutChan()
 	requestEvent := core.RequestEvent{Proposal: block}
-	ibftOut <- requestEvent
+	c.backend.EventsOutChan() <- requestEvent
 	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
 
 }
