@@ -8,9 +8,10 @@ import (
 
 // Transaction represents a transaction sent over the network
 type Transaction struct {
-	From   ibft.Address
-	To     ibft.Address
-	Amount *big.Int
+	From      ibft.Address
+	To        ibft.Address
+	Amount    *big.Int
+	Signature []byte
 }
 
 // NewTransaction initializes a transaction

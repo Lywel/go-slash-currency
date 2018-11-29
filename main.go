@@ -1,14 +1,15 @@
 package main
 
 import (
-	"bitbucket.org/ventureslash/go-ibft/backend"
-	"bitbucket.org/ventureslash/go-slash-currency/currency"
-	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
 	"crypto/ecdsa"
 	"crypto/rand"
-	eth "github.com/ethereum/go-ethereum/crypto"
 	"log"
 	"os"
+
+	"bitbucket.org/ventureslash/go-ibft/backend"
+	"bitbucket.org/ventureslash/go-slash-currency/currency"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
+	eth "github.com/ethereum/go-ethereum/crypto"
 )
 
 func main() {
@@ -17,18 +18,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	currency := &currency.Currency{}
-	endpoint := endpoint.New()
-	backend := backend.New(&backend.Config{
+	config := &backend.Config{
 		LocalAddr:   ":" + os.Getenv("VAL_PORT"),
 		RemoteAddrs: os.Args[1:],
-	}, privkey, currency, endpoint.EventProxy())
-	endpoint.SetNetworkMapGetter(backend.Network)
+	}
 
-	log.Print("configured to run on port: " + os.Getenv("VAL_PORT"))
+	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, privkey)
+	currency.Start()
 
-	backend.Start()
-	defer backend.Stop()
-
-	endpoint.Start(":" + os.Getenv("EP_PORT"))
 }
