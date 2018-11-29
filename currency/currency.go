@@ -7,13 +7,19 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"time"
 
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
+	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-ibft/crypto"
 	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+const (
+	blockInterval = 10 * time.Second
 )
 
 var (
@@ -25,7 +31,7 @@ var (
 type transaction struct {
 	From      ibft.Address
 	To        ibft.Address
-	Amount    uint64
+	Amount    *big.Int
 	Signature []byte
 }
 
@@ -36,6 +42,7 @@ type Currency struct {
 	backend      *backend.Backend
 	txEvents     chan []byte
 	endpoint     *endpoint.Endpoint
+	mineTimer    *time.Timer
 }
 
 // New creates a new currency manager
@@ -60,6 +67,9 @@ func (c *Currency) Start() {
 	defer c.backend.Stop()
 
 	go c.endpoint.Start(":" + os.Getenv("EP_PORT"))
+	if c.blockchain == nil || len(c.blockchain) == 0 {
+		c.createGenesisBlock()
+	}
 	c.handleEvent()
 }
 
@@ -103,7 +113,31 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	return nil
 }
 
-func (c *Currency) CreateBlock() {}
+func (c *Currency) createGenesisBlock() {
+	genesisBlock := types.NewBlock(&types.Header{
+		Number:     big.NewInt(0),
+		ParentHash: []byte{},
+	}, types.Transactions{})
+
+	c.blockchain = []*types.Block{genesisBlock}
+	log.Print("Genesis block created")
+	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
+}
+
+func (c *Currency) createBlock() {
+	lastBlock := c.blockchain[len(c.blockchain)-1]
+	block := types.NewBlock(&types.Header{
+		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
+		ParentHash: lastBlock.Hash(),
+	}, c.transactions)
+	log.Print("mine block: ", block)
+
+	ibftOut := c.backend.EventsOutChan()
+	requestEvent := core.RequestEvent{Proposal: block}
+	ibftOut <- requestEvent
+	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
+
+}
 
 func (c *Currency) handleEvent() {
 	for event := range c.txEvents {
@@ -146,6 +180,6 @@ func verifyTransaction(t transaction) error {
 }
 
 func (c *Currency) addTransactionToList(t transaction) {
-	tx := types.NewTransaction(t.To, t.From, big.NewInt(int64(t.Amount)))
+	tx := types.NewTransaction(t.To, t.From, t.Amount)
 	c.transactions = append(c.transactions, tx)
 }

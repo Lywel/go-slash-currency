@@ -11,7 +11,6 @@ import (
 
 type Header struct {
 	Number     *big.Int
-	Time       *big.Int
 	ParentHash []byte
 }
 
