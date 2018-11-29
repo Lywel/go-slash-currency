@@ -140,17 +140,19 @@ func (c *Currency) createBlock() {
 
 func (c *Currency) handleEvent() {
 	for event := range c.txEvents {
-
+		log.Println("Handling txEvent")
 		tx := transaction{}
 		err := rlp.DecodeBytes(event, &tx)
 		if err != nil {
 			log.Print("decode transaction failed")
 			continue
 		}
+		log.Print("decode transaction success")
 		if err = verifyTransaction(tx); err != nil {
 			log.Print(err)
 			continue
 		}
+		log.Print("verify transaction success")
 		c.addTransactionToList(tx)
 	}
 }
