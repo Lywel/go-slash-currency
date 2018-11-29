@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	blockInterval = 10 * time.Second
+	blockInterval = 2 * time.Second
 )
 
 var (
@@ -131,8 +131,17 @@ func (c *Currency) createBlock() {
 		ParentHash: lastBlock.Hash(),
 	}, c.transactions)
 	log.Print("mine block: ", block)
-
-	requestEvent := core.RequestEvent{Proposal: block}
+	encodedProposal, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	requestEvent := core.EncodedRequestEvent{
+		Proposal: &ibft.EncodedProposal{
+			Type: types.TypeBlock,
+			Prop: encodedProposal,
+		},
+	}
 	c.backend.EventsOutChan() <- requestEvent
 	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
 
