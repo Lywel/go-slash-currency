@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"flag"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/google/logger"
 )
 
 const (
@@ -23,6 +26,8 @@ const (
 )
 
 var (
+	verbose = flag.Bool("verbose-currency", false, "print currency info level logs")
+
 	errInvalidProposal         = errors.New("invalid proposal")
 	errInvalidBlock            = errors.New("invalid block hash")
 	errUnauthorizedTransaction = errors.New("this transaction is not authorized")
@@ -43,6 +48,7 @@ type Currency struct {
 	txEvents     chan []byte
 	endpoint     *endpoint.Endpoint
 	mineTimer    *time.Timer
+	logger       *logger.Logger
 }
 
 // New creates a new currency manager
@@ -52,12 +58,14 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 		transactions: transactions,
 		txEvents:     make(chan []byte),
 		endpoint:     endpoint.New(),
+		logger:       logger.Init("Currency", *verbose, false, ioutil.Discard),
 	}
 
 	currency.backend = backend.New(config, privateKey, currency, currency.endpoint.EventProxy(), currency.txEvents)
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 
-	log.Print("configured to run on port: " + os.Getenv("VAL_PORT"))
+	currency.logger.Infof("Start")
+	currency.logger.Info("configured to run on port: " + os.Getenv("VAL_PORT"))
 	return currency
 }
 
@@ -120,7 +128,7 @@ func (c *Currency) createGenesisBlock() {
 	}, types.Transactions{})
 
 	c.blockchain = []*types.Block{genesisBlock}
-	log.Print("Genesis block created")
+	c.logger.Warningf("Genesis block created")
 	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
 }
 
@@ -130,7 +138,7 @@ func (c *Currency) createBlock() {
 		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
 		ParentHash: lastBlock.Hash(),
 	}, c.transactions)
-	log.Print("mine block: ", block)
+	c.logger.Info("Mine and submit block: ", block)
 	encodedProposal, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		log.Print(err)
@@ -146,19 +154,18 @@ func (c *Currency) createBlock() {
 
 func (c *Currency) handleEvent() {
 	for event := range c.txEvents {
-		log.Println("Handling txEvent")
+		c.logger.Info("Handling txEvent")
 		tx := transaction{}
 		err := rlp.DecodeBytes(event, &tx)
 		if err != nil {
-			log.Print("decode transaction failed")
+			c.logger.Warning("decode transaction failed")
 			continue
 		}
-		log.Print("decode transaction success")
 		if err = verifyTransaction(tx); err != nil {
-			log.Print(err)
+			c.logger.Warning(err)
 			continue
 		}
-		log.Print("verify transaction success")
+		c.logger.Info("Tx verified and added to TxList ", "tx ", tx)
 		c.addTransactionToList(tx)
 	}
 }
