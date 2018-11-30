@@ -10,14 +10,14 @@ import (
 )
 
 type Header struct {
-	Number     *big.Int
-	ParentHash []byte
+	Number     *big.Int `json:"number"`
+	ParentHash []byte   `json:"parenthash"`
 }
 
 // Block is used to build the blockchain
 type Block struct {
-	Header       *Header
-	Transactions Transactions
+	Header       *Header      `json:"block"`
+	Transactions Transactions `json:"transactions"`
 }
 
 // "external" block encoding. used for eth protocol, etc.

@@ -62,6 +62,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	}
 
 	currency.backend = backend.New(config, privateKey, currency, currency.endpoint.EventProxy(), currency.txEvents)
+	currency.endpoint.Currency = currency
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 
 	currency.logger.Infof("Start")
@@ -128,7 +129,7 @@ func (c *Currency) createGenesisBlock() {
 	}, types.Transactions{})
 
 	c.blockchain = []*types.Block{genesisBlock}
-	c.logger.Warningf("Genesis block created")
+	c.logger.Info("Genesis block created")
 	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
 }
 
@@ -196,4 +197,11 @@ func verifyTransaction(t transaction) error {
 func (c *Currency) addTransactionToList(t transaction) {
 	tx := types.NewTransaction(t.To, t.From, t.Amount)
 	c.transactions = append(c.transactions, tx)
+}
+
+func (c *Currency) GetState() types.State {
+	return types.State{
+		Blockchain:   c.blockchain,
+		Transactions: c.transactions,
+	}
 }

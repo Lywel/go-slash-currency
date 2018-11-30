@@ -8,10 +8,10 @@ import (
 
 // Transaction represents a transaction sent over the network
 type Transaction struct {
-	From      ibft.Address
-	To        ibft.Address
-	Amount    *big.Int
-	Signature []byte
+	From      ibft.Address `json:"from"`
+	To        ibft.Address `json:"to"`
+	Amount    *big.Int     `json:"amount"`
+	Signature []byte       `json:"signature"`
 }
 
 // NewTransaction initializes a transaction

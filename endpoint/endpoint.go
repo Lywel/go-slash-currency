@@ -1,14 +1,20 @@
 package endpoint
 
 import (
-	"bitbucket.org/ventureslash/go-ibft"
-	"bitbucket.org/ventureslash/go-ibft/core"
 	"encoding/json"
-	"github.com/coryb/gotee"
 	"log"
 	"net/http"
 	"reflect"
+
+	"bitbucket.org/ventureslash/go-ibft"
+	"bitbucket.org/ventureslash/go-ibft/core"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
+	"github.com/coryb/gotee"
 )
+
+type currency interface {
+	GetState() types.State
+}
 
 const logFile = "slash-currency.logs"
 
@@ -27,6 +33,8 @@ type Endpoint struct {
 	networkMapGetter func() map[ibft.Address]string
 	// log tee
 	tee *gotee.Tee
+
+	Currency currency
 }
 
 // New returns a new endpoint
@@ -47,6 +55,7 @@ func New() *Endpoint {
 
 	http.HandleFunc("/hello", ep.helloHandler)
 	http.HandleFunc("/logs", ep.logsHandler)
+	http.HandleFunc("/sync", ep.syncHandler)
 
 	return ep
 }
@@ -58,6 +67,13 @@ func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
 	res := json.NewEncoder(w)
 	res.Encode("Hello world")
+}
+
+func (ep *Endpoint) syncHandler(w http.ResponseWriter, r *http.Request) {
+	state := ep.Currency.GetState()
+	res := json.NewEncoder(w)
+	res.SetIndent("", "  ")
+	res.Encode(state)
 }
 
 func (ep *Endpoint) SetNetworkMapGetter(networkMapGetter func() map[ibft.Address]string) {

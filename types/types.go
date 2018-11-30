@@ -10,6 +10,11 @@ const (
 	TypeBlock = iota
 )
 
+type State struct {
+	Blockchain   []*Block       `json:"blockchain"`
+	Transactions []*Transaction `json:"transactions"`
+}
+
 // RlpHash TODO
 func RlpHash(x interface{}) []byte {
 	var h common.Hash
