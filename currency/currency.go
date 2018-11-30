@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	blockInterval = 2 * time.Second
+	blockInterval = 5 * time.Second
 )
 
 var (
@@ -137,10 +137,7 @@ func (c *Currency) createBlock() {
 		return
 	}
 	requestEvent := core.EncodedRequestEvent{
-		Proposal: &ibft.EncodedProposal{
-			Type: types.TypeBlock,
-			Prop: encodedProposal,
-		},
+		Proposal: encodedProposal,
 	}
 	c.backend.EventsOutChan() <- requestEvent
 	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
