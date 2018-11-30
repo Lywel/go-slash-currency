@@ -52,7 +52,7 @@ func New() *Endpoint {
 }
 
 func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "./logs")
+	http.ServeFile(w, r, logFile)
 }
 
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
