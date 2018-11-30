@@ -3,10 +3,14 @@ package endpoint
 import (
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/core"
+	"encoding/json"
+	"github.com/coryb/gotee"
 	"log"
 	"net/http"
 	"reflect"
 )
+
+const logFile = "slash-currency.logs"
 
 // Endpoint maintains the set of active clients and broadcasts messages to the
 // clients.
@@ -21,6 +25,8 @@ type Endpoint struct {
 	unregister chan *Client
 	// A function that returns a mapping of connected clients
 	networkMapGetter func() map[ibft.Address]string
+	// log tee
+	tee *gotee.Tee
 }
 
 // New returns a new endpoint
@@ -33,11 +39,25 @@ func New() *Endpoint {
 		networkMapGetter: nil,
 	}
 
+	ep.tee, _ = gotee.NewTee(logFile)
+
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(ep, w, r)
 	})
 
+	http.HandleFunc("/hello", ep.helloHandler)
+	http.HandleFunc("/logs", ep.logsHandler)
+
 	return ep
+}
+
+func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "./logs")
+}
+
+func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
+	res := json.NewEncoder(w)
+	res.Encode("Hello world")
 }
 
 func (ep *Endpoint) SetNetworkMapGetter(networkMapGetter func() map[ibft.Address]string) {
