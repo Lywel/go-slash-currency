@@ -1,20 +1,21 @@
 package endpoint
 
 import (
-	"encoding/json"
-	"log"
-	"net/http"
-	"reflect"
-
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
+	"encoding/json"
 	"github.com/coryb/gotee"
+	"github.com/ethereum/go-ethereum/rlp"
+	"log"
+	"net/http"
+	"reflect"
 )
 
 type currency interface {
 	GetState() types.State
+	DecodeProposal(*ibft.EncodedProposal) (ibft.Proposal, error)
 }
 
 const logFile = "slash-currency.logs"
@@ -144,16 +145,38 @@ func (ep *Endpoint) handleMsg(msg *message, cli *Client) {
 }
 
 func (ep *Endpoint) publishEvent(e core.Event, eType string) {
-	dataType := reflect.TypeOf(e).String()
-	if dataType == "core.MessageEvent" {
-		return
-	}
-
-	ep.broadcast <- message{
+	msg := message{
 		Type:     eType,
 		Data:     e,
-		DataType: dataType,
+		DataType: reflect.TypeOf(e).String(),
 	}
+
+	switch ev := e.(type) {
+	case core.MessageEvent:
+		return
+	case core.EncodedRequestEvent:
+		if ep.Currency == nil {
+			//ep.debug.Warning("Unable to decode Request event: ep.currency is nil")
+			break
+		}
+
+		// Proposal: []byte -> EncodedProposal
+		var encodedProposal *ibft.EncodedProposal
+		err := rlp.DecodeBytes(ev.Proposal, &encodedProposal)
+		if err != nil {
+			break
+		}
+		// encodedProposal: EncodedProposal -> Proposal
+		proposal, err := ep.Currency.DecodeProposal(encodedProposal)
+		if err != nil {
+			break
+		}
+		msg.Data = core.RequestEvent{Proposal: proposal}
+		msg.DataType = reflect.TypeOf(msg.Data).String()
+		break
+	}
+
+	ep.broadcast <- msg
 }
 
 // EventProxy returns a directional channel proxy that forwards core.Event.
