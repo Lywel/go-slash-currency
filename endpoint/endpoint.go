@@ -78,6 +78,7 @@ func (ep *Endpoint) syncHandler(w http.ResponseWriter, r *http.Request) {
 	res.Encode(state)
 }
 
+// SetNetworkMapGetter sets the networkmap getter
 func (ep *Endpoint) SetNetworkMapGetter(networkMapGetter func() map[ibft.Address]string) {
 	ep.networkMapGetter = networkMapGetter
 }
@@ -142,6 +143,19 @@ func (ep *Endpoint) handleMsg(msg *message, cli *Client) {
 	}
 }
 
+func (ep *Endpoint) publishEvent(e core.Event, eType string) {
+	dataType := reflect.TypeOf(e).String()
+	if dataType == "core.MessageEvent" {
+		return
+	}
+
+	ep.broadcast <- message{
+		Type:     eType,
+		Data:     e,
+		DataType: dataType,
+	}
+}
+
 // EventProxy returns a directional channel proxy that forwards core.Event.
 // Events are not modified and forwarded as is, this way:
 //	in, pout <- pin, out
@@ -151,22 +165,14 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 		pout = make(chan core.Event, 256)
 		go func() {
 			for i := range pin {
-				ep.broadcast <- message{
-					Type:     "ibftEventIn",
-					Data:     i,
-					DataType: reflect.TypeOf(i).String(),
-				}
+				ep.publishEvent(i, "ibftEventIn")
 				in <- i
 			}
 			close(in)
 		}()
 		go func() {
 			for o := range out {
-				ep.broadcast <- message{
-					Type:     "ibftEventOut",
-					Data:     o,
-					DataType: reflect.TypeOf(o).String(),
-				}
+				ep.publishEvent(o, "ibftEventOut")
 				pout <- o
 			}
 			close(pout)
