@@ -112,7 +112,7 @@ func (c *Currency) Verify(proposal ibft.Proposal) error {
 	return nil
 }
 
-// Commit is called by an IBFT algorythm when a Proposal is accepted
+// Commit is called by an IBFT algorithm when a Proposal is accepted
 func (c *Currency) Commit(proposal ibft.Proposal) error {
 	block, ok := proposal.(*types.Block)
 	if !ok {
