@@ -3,11 +3,13 @@ package currency
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io/ioutil"
 	"log"
 	"math/big"
+	"net/http"
 	"os"
 	"time"
 
@@ -71,16 +73,36 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	return currency
 }
 
+//SyncAndStart synchronize state before startig the currency
+func (c *Currency) SyncAndStart(remote string) {
+	go c.handleEvent()
+	if remote == "" {
+		c.Start()
+	} else {
+		r, err := http.Get(remote + "/state")
+		if err != nil {
+			c.logger.Warning("/state request failed err ", err)
+			return
+		}
+		var state types.State
+		err = json.NewDecoder(r.Body).Decode(&state)
+		if err != nil {
+			c.logger.Warning("/state invalid response err ", err)
+			return
+		}
+		c.handleState(state.Blockchain, state.Transactions)
+		c.Start()
+	}
+}
+
 // Start makes the currency manager run
 func (c *Currency) Start() {
 	c.backend.Start()
 	defer c.backend.Stop()
-
 	go c.endpoint.Start(":" + os.Getenv("EP_PORT"))
 	if c.blockchain == nil || len(c.blockchain) == 0 {
 		c.createGenesisBlock()
 	}
-	c.handleEvent()
 }
 
 // DecodeProposal parses a payload and return a Proposal interface
