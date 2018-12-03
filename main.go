@@ -1,17 +1,18 @@
 package main
 
 import (
-	"bitbucket.org/ventureslash/go-ibft/backend"
-	"bitbucket.org/ventureslash/go-slash-currency/currency"
-	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"flag"
 	"fmt"
-	eth "github.com/ethereum/go-ethereum/crypto"
-	"github.com/google/logger"
 	"log"
 	"os"
+
+	"bitbucket.org/ventureslash/go-ibft/backend"
+	"bitbucket.org/ventureslash/go-slash-currency/currency"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
+	eth "github.com/ethereum/go-ethereum/crypto"
+	"github.com/google/logger"
 )
 
 type addrSlice []string
@@ -46,6 +47,13 @@ func main() {
 	}
 
 	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, privkey)
-	currency.Start()
+
+	log.Print("new currency created")
+	remote := ""
+	if len(syncAddrs) > 0 {
+		remote = syncAddrs[0]
+	}
+
+	currency.SyncAndStart(remote)
 
 }

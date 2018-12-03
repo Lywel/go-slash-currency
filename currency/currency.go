@@ -68,28 +68,30 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 
-	currency.logger.Infof("Start")
 	currency.logger.Info("configured to run on port: " + os.Getenv("VAL_PORT"))
 	return currency
 }
 
 //SyncAndStart synchronize state before startig the currency
 func (c *Currency) SyncAndStart(remote string) {
-	go c.handleEvent()
+	c.logger.Info("remote addr for sync: ", remote)
 	if remote == "" {
 		c.Start()
 	} else {
-		r, err := http.Get(remote + "/state")
+
+		r, err := http.Get("http://" + remote + "/state")
 		if err != nil {
 			c.logger.Warning("/state request failed err ", err)
 			return
 		}
+
 		var state types.State
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
 			c.logger.Warning("/state invalid response err ", err)
 			return
 		}
+
 		c.handleState(state.Blockchain, state.Transactions)
 		c.Start()
 	}
@@ -103,6 +105,8 @@ func (c *Currency) Start() {
 	if c.blockchain == nil || len(c.blockchain) == 0 {
 		c.createGenesisBlock()
 	}
+	c.handleEvent()
+
 }
 
 // DecodeProposal parses a payload and return a Proposal interface
