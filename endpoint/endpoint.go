@@ -1,16 +1,17 @@
 package endpoint
 
 import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"reflect"
+
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"encoding/json"
 	"github.com/coryb/gotee"
 	"github.com/ethereum/go-ethereum/rlp"
-	"log"
-	"net/http"
-	"reflect"
 )
 
 type currency interface {
@@ -144,11 +145,10 @@ func (ep *Endpoint) handleMsg(msg *message, cli *Client) {
 	}
 }
 
-func (ep *Endpoint) publishEvent(e core.Event, eType string) {
+func (ep *Endpoint) publishEvent(e interface{}, eType string) {
 	msg := message{
-		Type:     eType,
-		Data:     e,
-		DataType: reflect.TypeOf(e).String(),
+		Type: eType,
+		Data: e,
 	}
 
 	switch ev := e.(type) {
@@ -172,20 +172,28 @@ func (ep *Endpoint) publishEvent(e core.Event, eType string) {
 			break
 		}
 		msg.Data = core.RequestEvent{Proposal: proposal}
-		msg.DataType = reflect.TypeOf(msg.Data).String()
 		break
+	case []byte:
+		tx := types.Transaction{}
+		err := rlp.DecodeBytes(ev, &tx)
+		if err != nil {
+			break
+		}
+		msg.Data = tx
 	}
 
+	msg.DataType = reflect.TypeOf(msg.Data).String()
 	ep.broadcast <- msg
 }
 
 // EventProxy returns a directional channel proxy that forwards core.Event.
 // Events are not modified and forwarded as is, this way:
 //	in, pout <- pin, out
-func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan core.Event) {
-	return func(in, out chan core.Event) (pin, pout chan core.Event) {
+func (ep *Endpoint) EventProxy() func(in, out chan core.Event, custom chan []byte) (pin, pout chan core.Event, pcustom chan []byte) {
+	return func(in, out chan core.Event, custom chan []byte) (pin, pout chan core.Event, pcustom chan []byte) {
 		pin = make(chan core.Event, 256)
 		pout = make(chan core.Event, 256)
+		pcustom = make(chan []byte, 256)
 		go func() {
 			for i := range pin {
 				ep.publishEvent(i, "ibftEventIn")
@@ -199,6 +207,13 @@ func (ep *Endpoint) EventProxy() func(in, out chan core.Event) (pin, pout chan c
 				pout <- o
 			}
 			close(pout)
+		}()
+		go func() {
+			for c := range pcustom {
+				ep.publishEvent(c, "txEvent")
+				custom <- c
+			}
+			close(in)
 		}()
 		return
 	}
