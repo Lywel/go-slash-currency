@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"bitbucket.org/ventureslash/go-ibft"
+	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"github.com/coryb/gotee"
@@ -35,6 +36,7 @@ type Endpoint struct {
 	tee *gotee.Tee
 
 	Currency currency
+	Backend  *backend.Backend
 }
 
 // New returns a new endpoint
@@ -55,7 +57,7 @@ func New() *Endpoint {
 
 	http.HandleFunc("/hello", ep.helloHandler)
 	http.HandleFunc("/logs", ep.logsHandler)
-	http.HandleFunc("/sync", ep.syncHandler)
+	http.HandleFunc("/state", ep.syncHandler)
 
 	return ep
 }

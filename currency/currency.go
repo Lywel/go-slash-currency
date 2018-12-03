@@ -63,6 +63,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 
 	currency.backend = backend.New(config, privateKey, currency, currency.endpoint.EventProxy(), currency.txEvents)
 	currency.endpoint.Currency = currency
+	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 
 	currency.logger.Infof("Start")
