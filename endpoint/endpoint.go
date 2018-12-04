@@ -79,9 +79,9 @@ func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ep *Endpoint) syncHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	state := ep.Currency.GetState()
 	res := json.NewEncoder(w)
-	res.SetIndent("", "  ")
 	res.Encode(state)
 }
 
