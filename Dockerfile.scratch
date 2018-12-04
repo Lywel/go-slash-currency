@@ -1,4 +1,4 @@
 FROM scratch
 EXPOSE 8080
 COPY app app
-ENTRYPOINT ["/app", "-verbose-core", "-verbose-currency"]
+ENTRYPOINT ["/app", "-verbose-core", "-verbose-currency", "-verbose-manager"]
