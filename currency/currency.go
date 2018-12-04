@@ -68,7 +68,6 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 
-	currency.logger.Info("configured to run on port: " + os.Getenv("VAL_PORT"))
 	return currency
 }
 
@@ -81,14 +80,14 @@ func (c *Currency) SyncAndStart(remote string) {
 
 		r, err := http.Get("http://" + remote + "/state")
 		if err != nil {
-			c.logger.Warning("/state request failed err ", err)
+			c.logger.Warningf("/state request failed: %v", err)
 			return
 		}
 
 		var state types.State
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
-			c.logger.Warning("/state invalid response err ", err)
+			c.logger.Warningf("/state invalid response: %v", err)
 			return
 		}
 

@@ -3,7 +3,6 @@ package endpoint
 import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
-	"log"
 	"net/http"
 	"time"
 )
@@ -55,16 +54,15 @@ func (c *Client) readPump() {
 		_, msgBytes, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				c.ep.debug.Warningf("error: %v", err)
 			}
 			break
 		}
 		// Parse the message (client request)
-		log.Printf("msg: %s", msgBytes)
 		var msg message
 		err = json.Unmarshal(msgBytes, &msg)
 		if err != nil {
-			log.Println("Invalid json received:", err)
+			c.ep.debug.Warningf("Invalid json received: %v", err)
 		}
 
 		c.ep.handleMsg(&msg, c)
@@ -95,9 +93,9 @@ func (c *Client) writePump() {
 
 			s, err := json.Marshal(message)
 			if err != nil {
-				log.Printf("json error: %v", err)
+				c.ep.debug.Warningf("json error: %v", err)
 			}
-			log.Printf("sending json: %s", s)
+			c.ep.debug.Infof("sending json: %s", s)
 
 			c.conn.WriteJSON(message)
 			// Add queued chat messages to the current websocket message.
@@ -119,7 +117,7 @@ func serveWs(ep *Endpoint, w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
+		ep.debug.Warningf("connection upgrade failed: %v", err)
 		return
 	}
 	client := &Client{ep: ep, conn: conn, send: make(chan interface{}, 256)}

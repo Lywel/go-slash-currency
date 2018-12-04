@@ -1,17 +1,18 @@
 package endpoint
 
 import (
-	"encoding/json"
-	"log"
-	"net/http"
-	"reflect"
-
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
+	"encoding/json"
+	"flag"
 	"github.com/coryb/gotee"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/google/logger"
+	"io/ioutil"
+	"net/http"
+	"reflect"
 )
 
 type currency interface {
@@ -20,6 +21,8 @@ type currency interface {
 }
 
 const logFile = "slash-currency.logs"
+
+var verbose = flag.Bool("verbose-endpoint", false, "print endpoint info level logs")
 
 // Endpoint maintains the set of active clients and broadcasts messages to the
 // clients.
@@ -39,6 +42,7 @@ type Endpoint struct {
 
 	Currency currency
 	Backend  *backend.Backend
+	debug    *logger.Logger
 }
 
 // New returns a new endpoint
@@ -49,6 +53,7 @@ func New() *Endpoint {
 		unregister:       make(chan *Client),
 		clients:          make(map[*Client]bool),
 		networkMapGetter: nil,
+		debug:            logger.Init("Endpoint", *verbose, false, ioutil.Discard),
 	}
 
 	ep.tee, _ = gotee.NewTee(logFile)
@@ -114,12 +119,12 @@ func (ep *Endpoint) Start(addr string) {
 
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+		ep.debug.Errorf("ListenAndServe: %v", err)
 	}
 }
 
 func (ep *Endpoint) handleMsg(msg *message, cli *Client) {
-	log.Printf("Received client req: %s", msg.Type)
+	ep.debug.Infof("Received client req: %s", msg.Type)
 	switch msg.Type {
 	case "network-state":
 		if ep.networkMapGetter == nil {
