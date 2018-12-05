@@ -1,18 +1,15 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/rand"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-slash-currency/currency"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	eth "github.com/ethereum/go-ethereum/crypto"
+	"bitbucket.org/ventureslash/go-slash-currency/wallet"
+	"flag"
+	"fmt"
 	"github.com/google/logger"
+	"log"
+	"os"
 )
 
 type addrSlice []string
@@ -30,15 +27,16 @@ func main() {
 	var valAddrs addrSlice
 	var syncAddrs addrSlice
 
+	var walletPath = flag.String("w", "./slash-currency.wallet", "wallet file path")
 	flag.Var(&valAddrs, "v", "address of a validator")
 	flag.Var(&syncAddrs, "s", "address of a state provider")
 	flag.Parse()
 
 	logger.SetFlags(log.Lshortfile | log.Lmicroseconds)
 
-	privkey, err := ecdsa.GenerateKey(eth.S256(), rand.Reader)
+	wallet, err := wallet.New(*walletPath)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	config := &backend.Config{
@@ -46,9 +44,8 @@ func main() {
 		RemoteAddrs: valAddrs,
 	}
 
-	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, privkey)
+	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, wallet)
 
-	log.Print("new currency created")
 	remote := ""
 	if len(syncAddrs) > 0 {
 		remote = syncAddrs[0]
