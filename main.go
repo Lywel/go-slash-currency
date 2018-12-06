@@ -30,6 +30,7 @@ func main() {
 	var walletPath = flag.String("w", "./slash-currency.wallet", "wallet file path")
 	flag.Var(&valAddrs, "v", "address of a validator")
 	flag.Var(&syncAddrs, "s", "address of a state provider")
+	var noDisco = flag.Bool("-no-discovery", false, "disable dns peer discovery")
 	flag.Parse()
 
 	logger.SetFlags(log.Lshortfile | log.Lmicroseconds)
@@ -40,21 +41,23 @@ func main() {
 	}
 
 	// TODO: Log the error
-	seedVal, seedSync, _ := resolveDNSSeeds()
+	if !*noDisco {
+		seedVal, seedSync, _ := resolveDNSSeeds()
+		valAddrs := append(valAddrs, seedVal...)
+		syncAddrs = append(syncAddrs, seedSync...)
+	}
 
 	config := &backend.Config{
 		LocalAddr:   ":" + os.Getenv("VAL_PORT"),
-		RemoteAddrs: append(valAddrs, seedVal...),
+		RemoteAddrs: valAddrs,
 	}
 
 	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, wallet)
 
-	syncAddrs = append(syncAddrs, seedSync...)
 	remote := ""
 	if len(syncAddrs) > 0 {
 		remote = syncAddrs[0]
 	}
 
 	currency.SyncAndStart(remote)
-
 }
