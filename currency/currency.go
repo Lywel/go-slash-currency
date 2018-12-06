@@ -84,16 +84,15 @@ func (c *Currency) SyncAndStart(remote string) {
 		r, err := http.Get("http://" + remote + "/state")
 		if err != nil {
 			c.logger.Warningf("/state request failed: %v", err)
-			c.Start()
+			c.Start(true)
 			return
 		}
 
 		var state types.State
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
-			c.Start(true)
 			c.logger.Warningf("/state invalid response: %v", err)
-			c.Start()
+			c.Start(true)
 			return
 		}
 
@@ -103,13 +102,13 @@ func (c *Currency) SyncAndStart(remote string) {
 }
 
 // Start makes the currency manager run
-func (c *Currency) Start(bootstrap bool) {
+func (c *Currency) Start(isFirstNode bool) {
 	c.backend.Start()
 
 	defer c.backend.Stop()
 	go c.endpoint.Start(":" + os.Getenv("EP_PORT"))
 
-	if bootstrap {
+	if isFirstNode {
 		c.createGenesisBlock()
 		c.valSet = ibft.NewSet([]ibft.Address{c.backend.Address()})
 		c.backend.StartCore(c.valSet, &ibft.View{
