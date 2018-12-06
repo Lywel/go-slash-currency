@@ -51,6 +51,7 @@ type Currency struct {
 	txEvents      chan core.CustomEvent
 	endpoint      *endpoint.Endpoint
 	mineTimer     *time.Timer
+	blockTimeout  *time.Timer
 	logger        *logger.Logger
 	coreRunning   bool
 	waitForValSet bool
@@ -99,6 +100,7 @@ func (c *Currency) SyncAndStart(remote string) {
 		}
 
 		c.handleState(state.Blockchain, state.Transactions)
+		currentSigner = c.blockchain[len(c.blockchain)-1].Number().Uint64()
 		c.Start(false)
 	}
 }
@@ -161,6 +163,10 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	}
 	c.blockchain = append(c.blockchain, block)
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
+	currentSigner++
+	if c.isProposer() {
+		c.mineTimer = time.AfterFunc(blockInterval, c.mine)
+	}
 	return nil
 }
 
@@ -168,7 +174,7 @@ func (c *Currency) createGenesisBlock() {
 	genesisBlock := types.NewBlock(&types.Header{
 		Number:     big.NewInt(0),
 		ParentHash: []byte{},
-		Time:       big.NewInt(time.Now().UnixNano()),
+		Time:       big.NewInt(time.Now().Unix()),
 	}, types.Transactions{})
 
 	c.blockchain = []*types.Block{genesisBlock}
@@ -181,7 +187,7 @@ func (c *Currency) submitBlock() {
 	block := types.NewBlock(&types.Header{
 		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
 		ParentHash: lastBlock.Hash(),
-		Time:       big.NewInt(time.Now().UnixNano()),
+		Time:       big.NewInt(time.Now().Unix()),
 	}, c.transactions)
 	c.logger.Info("Mine and submit block: ", block)
 	encodedProposal, err := rlp.EncodeToBytes(block)
@@ -249,11 +255,13 @@ func (c *Currency) handleValidatorSetEvent(ev core.ValidatorSetEvent) {
 		Round:    ibft.Big0,
 	})
 	c.waitForValSet = false
-	lastBlockTimestamp := time.Duration(c.blockchain[len(c.blockchain)-1].Header.Time.Uint64()) * time.Nanosecond
-	now := time.Duration(time.Now().UnixNano()) * time.Nanosecond
-	timeToWait := blockInterval + lastBlockTimestamp - now
-	c.logger.Infof("Wait %d before mining", timeToWait)
-	c.mineTimer = time.AfterFunc(timeToWait, c.mine)
+	if c.isProposer() {
+		lastBlockTimestamp := time.Duration(c.blockchain[len(c.blockchain)-1].Header.Time.Uint64()) * time.Second
+		now := time.Duration(time.Now().Unix()) * time.Second
+		timeToWait := blockInterval + lastBlockTimestamp - now
+		c.logger.Infof("Wait %d before mining", timeToWait)
+		c.mineTimer = time.AfterFunc(timeToWait, c.mine)
+	}
 }
 
 func verifyTransaction(t transaction) error {
