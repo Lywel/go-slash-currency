@@ -43,7 +43,7 @@ func main() {
 	// TODO: Log the error
 	if !*noDisco {
 		seedVal, seedSync, _ := resolveDNSSeeds()
-		valAddrs := append(valAddrs, seedVal...)
+		valAddrs = append(valAddrs, seedVal...)
 		syncAddrs = append(syncAddrs, seedSync...)
 	}
 
