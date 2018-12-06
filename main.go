@@ -39,13 +39,17 @@ func main() {
 		panic(err)
 	}
 
+	// TODO: Log the error
+	seedVal, seedSync, _ := resolveDNSSeeds()
+
 	config := &backend.Config{
 		LocalAddr:   ":" + os.Getenv("VAL_PORT"),
-		RemoteAddrs: valAddrs,
+		RemoteAddrs: append(valAddrs, seedVal...),
 	}
 
 	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, wallet)
 
+	syncAddrs = append(syncAddrs, seedSync...)
 	remote := ""
 	if len(syncAddrs) > 0 {
 		remote = syncAddrs[0]
