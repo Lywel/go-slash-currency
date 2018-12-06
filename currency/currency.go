@@ -44,15 +44,16 @@ type transaction struct {
 
 // Currency initializes currency logic
 type Currency struct {
-	blockchain   []*types.Block
-	transactions []*types.Transaction
-	backend      *backend.Backend
-	valSet       *ibft.ValidatorSet
-	txEvents     chan core.CustomEvent
-	endpoint     *endpoint.Endpoint
-	mineTimer    *time.Timer
-	logger       *logger.Logger
-	coreRunning  bool
+	blockchain    []*types.Block
+	transactions  []*types.Transaction
+	backend       *backend.Backend
+	valSet        *ibft.ValidatorSet
+	txEvents      chan core.CustomEvent
+	endpoint      *endpoint.Endpoint
+	mineTimer     *time.Timer
+	logger        *logger.Logger
+	coreRunning   bool
+	waitForValSet bool
 }
 
 // New creates a new currency manager
@@ -70,6 +71,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
 	currency.coreRunning = false
+	currency.waitForValSet = false
 
 	return currency
 }
@@ -115,6 +117,8 @@ func (c *Currency) Start(isFirstNode bool) {
 			Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
 			Round:    ibft.Big0,
 		})
+	} else {
+		c.waitForValSet = true
 	}
 	c.handleEvent()
 
@@ -164,20 +168,20 @@ func (c *Currency) createGenesisBlock() {
 	genesisBlock := types.NewBlock(&types.Header{
 		Number:     big.NewInt(0),
 		ParentHash: []byte{},
-		Time:       big.NewInt(time.Now().Unix()),
+		Time:       big.NewInt(time.Now().UnixNano()),
 	}, types.Transactions{})
 
 	c.blockchain = []*types.Block{genesisBlock}
 	c.logger.Info("Genesis block created")
-	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
+	c.mineTimer = time.AfterFunc(blockInterval, c.mine)
 }
 
-func (c *Currency) createBlock() {
+func (c *Currency) submitBlock() {
 	lastBlock := c.blockchain[len(c.blockchain)-1]
 	block := types.NewBlock(&types.Header{
 		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
 		ParentHash: lastBlock.Hash(),
-		Time:       big.NewInt(time.Now().Unix()),
+		Time:       big.NewInt(time.Now().UnixNano()),
 	}, c.transactions)
 	c.logger.Info("Mine and submit block: ", block)
 	encodedProposal, err := rlp.EncodeToBytes(block)
@@ -189,7 +193,6 @@ func (c *Currency) createBlock() {
 		Proposal: encodedProposal,
 	}
 	c.backend.EventsOutChan() <- requestEvent
-	c.mineTimer = time.AfterFunc(blockInterval, c.createBlock)
 
 }
 
@@ -200,14 +203,13 @@ func (c *Currency) handleEvent() {
 			c.logger.Info("Handling JoinEvent")
 			addr := ibft.Address{}
 			addr.FromBytes(event.Msg)
-			c.valSet.AddValidator(addr)
-			i, _ := c.valSet.GetByAddress(c.backend.Address())
-			if currentSigner%c.valSet.Size() == i {
+			if c.isProposer() {
 				c.backend.EventsOutChan() <- core.ValidatorSetEvent{
 					ValSet: c.valSet,
 					Dest:   addr,
 				}
 			}
+			c.valSet.AddValidator(addr)
 		case 1:
 			c.logger.Info("Handling ValidatorSetEvent")
 			valSetEvent := core.ValidatorSetEvent{}
@@ -216,14 +218,8 @@ func (c *Currency) handleEvent() {
 				c.logger.Warning("decode ValidatorSetEvent failed")
 				continue
 			}
-			if valSetEvent.Dest == c.backend.Address() {
-				c.logger.Info("Update valset ", valSetEvent.ValSet)
-				c.valSet = valSetEvent.ValSet
-				c.valSet.AddValidator(c.backend.Address())
-				c.backend.StartCore(c.valSet, &ibft.View{
-					Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
-					Round:    ibft.Big0})
-
+			if c.waitForValSet && valSetEvent.Dest == c.backend.Address() {
+				c.handleValidatorSetEvent(valSetEvent)
 			}
 		case 2:
 			c.logger.Info("Handling txEvent")
@@ -242,6 +238,22 @@ func (c *Currency) handleEvent() {
 		}
 
 	}
+}
+
+func (c *Currency) handleValidatorSetEvent(ev core.ValidatorSetEvent) {
+	c.logger.Info("Update valset ", ev.ValSet)
+	c.valSet = ev.ValSet
+	c.valSet.AddValidator(c.backend.Address())
+	c.backend.StartCore(c.valSet, &ibft.View{
+		Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
+		Round:    ibft.Big0,
+	})
+	c.waitForValSet = false
+	lastBlockTimestamp := time.Duration(c.blockchain[len(c.blockchain)-1].Header.Time.Uint64()) * time.Nanosecond
+	now := time.Duration(time.Now().UnixNano()) * time.Nanosecond
+	timeToWait := blockInterval + lastBlockTimestamp - now
+	c.logger.Infof("Wait %d before mining", timeToWait)
+	c.mineTimer = time.AfterFunc(timeToWait, c.mine)
 }
 
 func verifyTransaction(t transaction) error {

@@ -30,7 +30,7 @@ func main() {
 	var walletPath = flag.String("w", "./slash-currency.wallet", "wallet file path")
 	flag.Var(&valAddrs, "v", "address of a validator")
 	flag.Var(&syncAddrs, "s", "address of a state provider")
-	var noDisco = flag.Bool("-no-discovery", false, "disable dns peer discovery")
+	var noDisco = flag.Bool("no-discovery", false, "disable dns peer discovery")
 	flag.Parse()
 
 	logger.SetFlags(log.Lshortfile | log.Lmicroseconds)
