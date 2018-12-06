@@ -81,6 +81,7 @@ func (c *Currency) SyncAndStart(remote string) {
 		r, err := http.Get("http://" + remote + "/state")
 		if err != nil {
 			c.logger.Warningf("/state request failed: %v", err)
+			c.Start()
 			return
 		}
 
@@ -88,6 +89,7 @@ func (c *Currency) SyncAndStart(remote string) {
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
 			c.logger.Warningf("/state invalid response: %v", err)
+			c.Start()
 			return
 		}
 
