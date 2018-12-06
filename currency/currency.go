@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	blockInterval = 5 * time.Second
+	blockInterval    = 5 * time.Second
+	blockTimeoutTime = 8 * time.Second
 )
 
 var (
@@ -163,9 +164,14 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	}
 	c.blockchain = append(c.blockchain, block)
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
+	if c.blockTimeout != nil {
+		c.blockTimeout.Stop()
+	}
+	c.blockTimeout = time.AfterFunc(blockTimeoutTime, c.handleTimeout)
 	currentSigner++
+
 	if c.isProposer() {
-		c.mineTimer = time.AfterFunc(blockInterval, c.mine)
+		c.setTimer()
 	}
 	return nil
 }
@@ -179,7 +185,7 @@ func (c *Currency) createGenesisBlock() {
 
 	c.blockchain = []*types.Block{genesisBlock}
 	c.logger.Info("Genesis block created")
-	c.mineTimer = time.AfterFunc(blockInterval, c.mine)
+	c.setTimer()
 }
 
 func (c *Currency) submitBlock() {
