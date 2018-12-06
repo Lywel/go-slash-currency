@@ -47,10 +47,12 @@ type Currency struct {
 	blockchain   []*types.Block
 	transactions []*types.Transaction
 	backend      *backend.Backend
-	txEvents     chan []byte
+	valSet       *ibft.ValidatorSet
+	txEvents     chan core.CustomEvent
 	endpoint     *endpoint.Endpoint
 	mineTimer    *time.Timer
 	logger       *logger.Logger
+	coreRunning  bool
 }
 
 // New creates a new currency manager
@@ -58,7 +60,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency := &Currency{
 		blockchain:   blockchain,
 		transactions: transactions,
-		txEvents:     make(chan []byte),
+		txEvents:     make(chan core.CustomEvent),
 		endpoint:     endpoint.New(),
 		logger:       logger.Init("Currency", *verbose, false, ioutil.Discard),
 	}
@@ -67,6 +69,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency.endpoint.Currency = currency
 	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
+	currency.coreRunning = false
 
 	return currency
 }
@@ -75,7 +78,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 func (c *Currency) SyncAndStart(remote string) {
 	c.logger.Info("remote addr for sync: ", remote)
 	if remote == "" {
-		c.Start()
+		c.Start(true)
 	} else {
 
 		r, err := http.Get("http://" + remote + "/state")
@@ -88,23 +91,31 @@ func (c *Currency) SyncAndStart(remote string) {
 		var state types.State
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
+			c.Start(true)
 			c.logger.Warningf("/state invalid response: %v", err)
 			c.Start()
 			return
 		}
 
 		c.handleState(state.Blockchain, state.Transactions)
-		c.Start()
+		c.Start(false)
 	}
 }
 
 // Start makes the currency manager run
-func (c *Currency) Start() {
+func (c *Currency) Start(bootstrap bool) {
 	c.backend.Start()
+
 	defer c.backend.Stop()
 	go c.endpoint.Start(":" + os.Getenv("EP_PORT"))
-	if c.blockchain == nil || len(c.blockchain) == 0 {
+
+	if bootstrap {
 		c.createGenesisBlock()
+		c.valSet = ibft.NewSet([]ibft.Address{c.backend.Address()})
+		c.backend.StartCore(c.valSet, &ibft.View{
+			Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
+			Round:    ibft.Big0,
+		})
 	}
 	c.handleEvent()
 
@@ -154,6 +165,7 @@ func (c *Currency) createGenesisBlock() {
 	genesisBlock := types.NewBlock(&types.Header{
 		Number:     big.NewInt(0),
 		ParentHash: []byte{},
+		Time:       big.NewInt(time.Now().Unix()),
 	}, types.Transactions{})
 
 	c.blockchain = []*types.Block{genesisBlock}
@@ -166,6 +178,7 @@ func (c *Currency) createBlock() {
 	block := types.NewBlock(&types.Header{
 		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
 		ParentHash: lastBlock.Hash(),
+		Time:       big.NewInt(time.Now().Unix()),
 	}, c.transactions)
 	c.logger.Info("Mine and submit block: ", block)
 	encodedProposal, err := rlp.EncodeToBytes(block)
@@ -183,19 +196,52 @@ func (c *Currency) createBlock() {
 
 func (c *Currency) handleEvent() {
 	for event := range c.txEvents {
-		c.logger.Info("Handling txEvent")
-		tx := transaction{}
-		err := rlp.DecodeBytes(event, &tx)
-		if err != nil {
-			c.logger.Warning("decode transaction failed")
-			continue
+		switch event.Type {
+		case 0:
+			c.logger.Info("Handling JoinEvent")
+			addr := ibft.Address{}
+			addr.FromBytes(event.Msg)
+			c.valSet.AddValidator(addr)
+			i, _ := c.valSet.GetByAddress(c.backend.Address())
+			if currentSigner%c.valSet.Size() == i {
+				c.backend.EventsOutChan() <- core.ValidatorSetEvent{
+					ValSet: c.valSet,
+					Dest:   addr,
+				}
+			}
+		case 1:
+			c.logger.Info("Handling ValidatorSetEvent")
+			valSetEvent := core.ValidatorSetEvent{}
+			err := rlp.DecodeBytes(event.Msg, &valSetEvent)
+			if err != nil {
+				c.logger.Warning("decode ValidatorSetEvent failed")
+				continue
+			}
+			if valSetEvent.Dest == c.backend.Address() {
+				c.logger.Info("Update valset ", valSetEvent.ValSet)
+				c.valSet = valSetEvent.ValSet
+				c.valSet.AddValidator(c.backend.Address())
+				c.backend.StartCore(c.valSet, &ibft.View{
+					Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
+					Round:    ibft.Big0})
+
+			}
+		case 2:
+			c.logger.Info("Handling txEvent")
+			tx := transaction{}
+			err := rlp.DecodeBytes(event.Msg, &tx)
+			if err != nil {
+				c.logger.Warning("decode transaction failed")
+				continue
+			}
+			if err = verifyTransaction(tx); err != nil {
+				c.logger.Warning(err)
+				continue
+			}
+			c.logger.Info("Tx verified and added to TxList ", "tx ", tx)
+			c.addTransactionToList(tx)
 		}
-		if err = verifyTransaction(tx); err != nil {
-			c.logger.Warning(err)
-			continue
-		}
-		c.logger.Info("Tx verified and added to TxList ", "tx ", tx)
-		c.addTransactionToList(tx)
+
 	}
 }
 

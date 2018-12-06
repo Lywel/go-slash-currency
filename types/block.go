@@ -12,11 +12,12 @@ import (
 type Header struct {
 	Number     *big.Int `json:"number"`
 	ParentHash []byte   `json:"parenthash"`
+	Time       *big.Int `json:"timestamp"`
 }
 
 // Block is used to build the blockchain
 type Block struct {
-	Header       *Header      `json:"block"`
+	Header       *Header      `json:"header"`
 	Transactions Transactions `json:"transactions"`
 }
 

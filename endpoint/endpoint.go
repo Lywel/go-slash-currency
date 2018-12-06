@@ -1,18 +1,19 @@
 package endpoint
 
 import (
+	"encoding/json"
+	"flag"
+	"io/ioutil"
+	"net/http"
+	"reflect"
+
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"encoding/json"
-	"flag"
 	"github.com/coryb/gotee"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/google/logger"
-	"io/ioutil"
-	"net/http"
-	"reflect"
 )
 
 type currency interface {
@@ -194,11 +195,11 @@ func (ep *Endpoint) publishEvent(e interface{}, eType string) {
 // EventProxy returns a directional channel proxy that forwards core.Event.
 // Events are not modified and forwarded as is, this way:
 //	in, pout <- pin, out
-func (ep *Endpoint) EventProxy() func(in, out chan core.Event, custom chan []byte) (pin, pout chan core.Event, pcustom chan []byte) {
-	return func(in, out chan core.Event, custom chan []byte) (pin, pout chan core.Event, pcustom chan []byte) {
+func (ep *Endpoint) EventProxy() func(in, out chan core.Event, custom chan core.CustomEvent) (pin, pout chan core.Event, pcustom chan core.CustomEvent) {
+	return func(in, out chan core.Event, custom chan core.CustomEvent) (pin, pout chan core.Event, pcustom chan core.CustomEvent) {
 		pin = make(chan core.Event, 256)
 		pout = make(chan core.Event, 256)
-		pcustom = make(chan []byte, 256)
+		pcustom = make(chan core.CustomEvent, 256)
 		go func() {
 			for i := range pin {
 				ep.publishEvent(i, "ibftEventIn")
