@@ -56,6 +56,7 @@ type Currency struct {
 	logger        *logger.Logger
 	coreRunning   bool
 	waitForValSet bool
+	currentSigner uint64
 }
 
 // New creates a new currency manager
@@ -72,6 +73,7 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 	currency.endpoint.Currency = currency
 	currency.endpoint.Backend = currency.backend
 	currency.endpoint.SetNetworkMapGetter(currency.backend.Network)
+	currency.currentSigner = 0
 	currency.coreRunning = false
 	currency.waitForValSet = false
 
@@ -101,7 +103,7 @@ func (c *Currency) SyncAndStart(remote string) {
 		}
 
 		c.handleState(state.Blockchain, state.Transactions)
-		currentSigner = c.blockchain[len(c.blockchain)-1].Number().Uint64()
+		c.currentSigner = c.blockchain[len(c.blockchain)-1].Number().Uint64()
 		c.Start(false)
 	}
 }
@@ -168,7 +170,7 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 		c.blockTimeout.Stop()
 	}
 	c.blockTimeout = time.AfterFunc(blockTimeoutTime, c.handleTimeout)
-	currentSigner++
+	c.currentSigner = proposal.Number().Uint64()
 
 	if c.isProposer() {
 		c.setTimer()
@@ -211,7 +213,7 @@ func (c *Currency) submitBlock() {
 func (c *Currency) handleEvent() {
 	for event := range c.txEvents {
 		switch event.Type {
-		case 0:
+		case ibft.TypeJoinEvent:
 			c.logger.Info("Handling JoinEvent")
 			addr := ibft.Address{}
 			addr.FromBytes(event.Msg)
@@ -222,7 +224,7 @@ func (c *Currency) handleEvent() {
 				}
 			}
 			c.valSet.AddValidator(addr)
-		case 1:
+		case ibft.TypeValidatorSetEvent:
 			c.logger.Info("Handling ValidatorSetEvent")
 			valSetEvent := core.ValidatorSetEvent{}
 			err := rlp.DecodeBytes(event.Msg, &valSetEvent)
@@ -233,7 +235,12 @@ func (c *Currency) handleEvent() {
 			if c.waitForValSet && valSetEvent.Dest == c.backend.Address() {
 				c.handleValidatorSetEvent(valSetEvent)
 			}
-		case 2:
+		case ibft.TypeRemoveValidatorEvent:
+			c.logger.Info("Handling RemoveValidatorEvent")
+			addr := ibft.Address{}
+			addr.FromBytes(event.Msg)
+			c.valSet.RemoveValidator(addr)
+		case ibft.TypeCustomEvents:
 			c.logger.Info("Handling txEvent")
 			tx := transaction{}
 			err := rlp.DecodeBytes(event.Msg, &tx)
