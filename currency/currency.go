@@ -105,7 +105,8 @@ func (c *Currency) SyncAndStart(remotes []string) {
 		// State has been successfully imported
 		c.handleState(state.Blockchain, state.Transactions)
 		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
-		return c.Start(false)
+		c.Start(false)
+		return
 	}
 
 	// No state could be synced, starting a new blockchain
@@ -154,8 +155,8 @@ func (c *Currency) Verify(proposal ibft.Proposal) error {
 	if !ok {
 		return errInvalidProposal
 	}
-	lastBlock := c.blockchain[len(c.blockchain)-1]
-	if bytes.Compare(block.Header.ParentHash, lastBlock.Hash()) != 0 {
+	lastBlock := c.blockchain.CurrentBlock()
+	if bytes.Compare(block.Header.ParentHash.Bytes(), lastBlock.Hash().Bytes()) != 0 {
 		return errInvalidBlock
 	}
 	return nil
@@ -167,7 +168,9 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	if !ok {
 		return errInvalidProposal
 	}
-	c.blockchain = append(c.blockchain, block)
+	// TODO: verify fiability of block appending
+	// missing receipt = nil
+	c.blockchain.WriteBlock(block, nil)
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
 	if c.blockTimeout != nil {
 		c.blockTimeout.Stop()
@@ -182,7 +185,7 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 }
 
 func (c *Currency) submitBlock() {
-	lastBlock := c.blockchain[len(c.blockchain)-1]
+	lastBlock := c.blockchain.CurrentBlock()
 	block := types.NewBlock(&types.Header{
 		Number:     new(big.Int).Add(lastBlock.Header.Number, ibft.Big1),
 		ParentHash: lastBlock.Hash(),
@@ -255,12 +258,12 @@ func (c *Currency) handleValidatorSetEvent(ev core.ValidatorSetEvent) {
 	c.valSet = ev.ValSet
 	c.valSet.AddValidator(c.backend.Address())
 	c.backend.StartCore(c.valSet, &ibft.View{
-		Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
+		Sequence: c.blockchain.CurrentBlock().Number(),
 		Round:    ibft.Big0,
 	})
 	c.waitForValSet = false
 	if c.isProposer() {
-		lastBlockTimestamp := time.Duration(c.blockchain[len(c.blockchain)-1].Header.Time.Uint64()) * time.Second
+		lastBlockTimestamp := time.Duration(c.blockchain.CurrentBlock().Header.Time.Uint64()) * time.Second
 		now := time.Duration(time.Now().Unix()) * time.Second
 		timeToWait := blockInterval + lastBlockTimestamp - now
 		c.logger.Infof("Wait %d before mining", timeToWait)

@@ -1,6 +1,8 @@
 package types
 
-import ()
+import (
+	"bitbucket.org/ventureslash/go-slash-currency/blockchain"
+)
 
 const (
 	// TypeBlock designate a proposal of type block
@@ -9,10 +11,6 @@ const (
 
 // State describes the current currency state
 type State struct {
-	Blockchain   []*Block       `json:"blockchain"`
-	Transactions []*Transaction `json:"transactions"`
+	Blockchain   blockchain.BlockChain `json:"blockchain"`
+	Transactions []*Transaction        `json:"transactions"`
 }
-
-type Receipt struct {
-}
-type Receipts []*Receipt

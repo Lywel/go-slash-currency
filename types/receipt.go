@@ -13,8 +13,10 @@ type Receipt struct {
 	Status uint64
 }
 
-// NewReceipt creates a transaction receipt
+// Receipts is an array of Receipt
+type Receipts []*Receipt
 
+// NewReceipt creates a transaction receipt
 func NewReceipt(txHash []byte, status uint64) *Receipt {
 	return &Receipt{
 		TxHash: txHash,
