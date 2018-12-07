@@ -223,7 +223,7 @@ func (c *Currency) handleEvent() {
 					Dest:   addr,
 				}
 			}
-			c.valSet.AddValidator(addr)
+			c.backend.EventsInChan() <- core.AddValidatorEvent{Address: addr}
 		case ibft.TypeValidatorSetEvent:
 			c.logger.Info("Handling ValidatorSetEvent")
 			valSetEvent := core.ValidatorSetEvent{}
