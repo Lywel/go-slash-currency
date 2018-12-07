@@ -1,26 +1,26 @@
 package currency
 
 import (
+	"bitbucket.org/ventureslash/go-ibft"
+	"bitbucket.org/ventureslash/go-ibft/backend"
+	"bitbucket.org/ventureslash/go-ibft/core"
+	"bitbucket.org/ventureslash/go-ibft/crypto"
+	"bitbucket.org/ventureslash/go-slash-currency/blockchain"
+	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"flag"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/google/logger"
 	"io/ioutil"
 	"log"
 	"math/big"
 	"net/http"
 	"os"
 	"time"
-
-	"bitbucket.org/ventureslash/go-ibft"
-	"bitbucket.org/ventureslash/go-ibft/backend"
-	"bitbucket.org/ventureslash/go-ibft/core"
-	"bitbucket.org/ventureslash/go-ibft/crypto"
-	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
-	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/google/logger"
 )
 
 const (
@@ -45,7 +45,7 @@ type transaction struct {
 
 // Currency initializes currency logic
 type Currency struct {
-	blockchain    []*types.Block
+	blockchain    *blockchain.BlockChain
 	transactions  []*types.Transaction
 	backend       *backend.Backend
 	valSet        *ibft.ValidatorSet
@@ -60,11 +60,16 @@ type Currency struct {
 }
 
 // New creates a new currency manager
-func New(blockchain []*types.Block, transactions []*types.Transaction, config *backend.Config, privateKey *ecdsa.PrivateKey) *Currency {
+func New(config *backend.Config, privateKey *ecdsa.PrivateKey) *Currency {
+	bc, err := blockchain.New("./chaindata")
+	if err != nil {
+		panic("blockchain failure: " + err.Error())
+	}
+
 	currency := &Currency{
-		blockchain:   blockchain,
-		transactions: transactions,
 		txEvents:     make(chan core.CustomEvent),
+		transactions: []*types.Transaction{},
+		blockchain:   bc,
 		endpoint:     endpoint.New(),
 		logger:       logger.Init("Currency", *verbose, false, ioutil.Discard),
 	}
@@ -81,31 +86,30 @@ func New(blockchain []*types.Block, transactions []*types.Transaction, config *b
 }
 
 //SyncAndStart synchronize state before startig the currency
-func (c *Currency) SyncAndStart(remote string) {
-	c.logger.Info("remote addr for sync: ", remote)
-	if remote == "" {
-		c.Start(true)
-	} else {
-
+func (c *Currency) SyncAndStart(remotes []string) {
+	for _, remote := range remotes {
+		c.logger.Info("Syncing state from: ", remote)
 		r, err := http.Get("http://" + remote + "/state")
 		if err != nil {
-			c.logger.Warningf("/state request failed: %v", err)
-			c.Start(true)
-			return
+			c.logger.Warningf("failed to get state from %s: %v", remote, err)
+			continue
 		}
 
 		var state types.State
 		err = json.NewDecoder(r.Body).Decode(&state)
 		if err != nil {
-			c.logger.Warningf("/state invalid response: %v", err)
-			c.Start(true)
-			return
+			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
+			continue
 		}
 
+		// State has been successfully imported
 		c.handleState(state.Blockchain, state.Transactions)
-		c.currentSigner = c.blockchain[len(c.blockchain)-1].Number().Uint64()
-		c.Start(false)
+		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
+		return c.Start(false)
 	}
+
+	// No state could be synced, starting a new blockchain
+	c.Start(true)
 }
 
 // Start makes the currency manager run
@@ -116,17 +120,16 @@ func (c *Currency) Start(isFirstNode bool) {
 	go c.endpoint.Start(":" + os.Getenv("EP_PORT"))
 
 	if isFirstNode {
-		c.createGenesisBlock()
+		c.setTimer()
 		c.valSet = ibft.NewSet([]ibft.Address{c.backend.Address()})
 		c.backend.StartCore(c.valSet, &ibft.View{
-			Sequence: big.NewInt(int64(len(c.blockchain) - 1)),
+			Sequence: c.blockchain.CurrentBlock().Number(),
 			Round:    ibft.Big0,
 		})
 	} else {
 		c.waitForValSet = true
 	}
 	c.handleEvent()
-
 }
 
 // DecodeProposal parses a payload and return a Proposal interface
@@ -176,18 +179,6 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 		c.setTimer()
 	}
 	return nil
-}
-
-func (c *Currency) createGenesisBlock() {
-	genesisBlock := types.NewBlock(&types.Header{
-		Number:     big.NewInt(0),
-		ParentHash: []byte{},
-		Time:       big.NewInt(time.Now().Unix()),
-	}, types.Transactions{})
-
-	c.blockchain = []*types.Block{genesisBlock}
-	c.logger.Info("Genesis block created")
-	c.setTimer()
 }
 
 func (c *Currency) submitBlock() {
@@ -305,6 +296,7 @@ func (c *Currency) addTransactionToList(t transaction) {
 	c.transactions = append(c.transactions, tx)
 }
 
+// GetState returns the current state (blockchain and transactions)
 func (c *Currency) GetState() types.State {
 	return types.State{
 		Blockchain:   c.blockchain,

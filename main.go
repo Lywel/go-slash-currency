@@ -52,7 +52,7 @@ func main() {
 		RemoteAddrs: valAddrs,
 	}
 
-	currency := currency.New([]*types.Block{}, []*types.Transaction{}, config, wallet)
+	currency := currency.New(config, wallet)
 
 	remote := ""
 	if len(syncAddrs) > 0 {

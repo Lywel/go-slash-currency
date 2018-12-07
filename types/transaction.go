@@ -33,21 +33,21 @@ func (s Transactions) Len() int { return len(s) }
 func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // Hash compute the hash of a transaction
-func (s *Transaction) Hash() []byte {
-	return RlpHash(s)
+func (s *Transaction) Hash() ibft.Hash {
+	return ibft.RlpHash(s)
 }
 
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
-	remove := make(map[string]struct{})
+	remove := make(map[ibft.Hash]struct{})
 	for _, tx := range b {
-		remove[string(tx.Hash())] = struct{}{}
+		remove[tx.Hash()] = struct{}{}
 	}
 
 	for _, tx := range a {
-		if _, ok := remove[string(tx.Hash())]; !ok {
+		if _, ok := remove[tx.Hash()]; !ok {
 			keep = append(keep, tx)
 		}
 	}

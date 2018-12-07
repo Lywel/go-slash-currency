@@ -10,9 +10,9 @@ import (
 )
 
 type Header struct {
-	Number     *big.Int `json:"number"`
-	ParentHash []byte   `json:"parenthash"`
-	Time       *big.Int `json:"timestamp"`
+	Number     *big.Int  `json:"number"`
+	ParentHash ibft.Hash `json:"parenthash"`
+	Time       *big.Int  `json:"timestamp"`
 }
 
 // Block is used to build the blockchain
@@ -36,8 +36,8 @@ func NewBlock(header *Header, transactions []*Transaction) *Block {
 }
 
 // Hash compute the hash of a block
-func (b *Block) Hash() []byte {
-	return RlpHash(b.Header)
+func (b *Block) Hash() ibft.Hash {
+	return ibft.RlpHash(b.Header)
 }
 
 // Number return the number of a block
