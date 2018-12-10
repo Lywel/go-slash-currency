@@ -5,17 +5,20 @@ import (
 	"bitbucket.org/ventureslash/go-slash-currency/rawdb"
 	"bitbucket.org/ventureslash/go-slash-currency/state"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"errors"
+	"flag"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/google/logger"
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-/* var verbose = flag.Bool("verbose-blockchain", false, "print blockchain info level logs") */
+var verbose = flag.Bool("verbose-blockchain", false, "print blockchain info level logs")
 
 // BlockChain is the structure managing and storing blocks
 type BlockChain struct {
@@ -25,6 +28,7 @@ type BlockChain struct {
 	mu           sync.RWMutex // global mutex for locking chain operations
 	chainmu      sync.RWMutex // blockchain insertion lock
 	state        *state.StateDB
+	debug        *logger.Logger
 }
 
 // New resturns a new instance of Blockchain
@@ -37,6 +41,7 @@ func New(file string) (*BlockChain, error) {
 	bc := &BlockChain{
 		db:    db,
 		state: state.New(),
+		debug: logger.Init("BlockChain", *verbose, false, ioutil.Discard),
 	}
 
 	bc.genesisBlock = bc.readOrCreateGenesisBlock()
@@ -47,6 +52,7 @@ func New(file string) (*BlockChain, error) {
 func (bc *BlockChain) readOrCreateGenesisBlock() *types.Block {
 	genesis := bc.GetBlockByNumber(0)
 	if genesis == nil {
+		bc.debug.Info("No genesis block, creating one.")
 		genesis = types.NewBlock(&types.Header{
 			Number:     big.NewInt(0),
 			ParentHash: ibft.Hash{},
@@ -58,14 +64,17 @@ func (bc *BlockChain) readOrCreateGenesisBlock() *types.Block {
 		rawdb.WriteBlockHash(bc.db, genesis.Hash(), genesis.Number().Uint64())
 		rawdb.WriteHeadBlockHash(bc.db, genesis.Hash())
 	}
+	bc.currentBlock.Store(genesis)
 
 	return genesis
 }
 
 // GetBlockByHash retrieves a block from the database by hash
 func (bc *BlockChain) GetBlockByHash(hash ibft.Hash) *types.Block {
+	bc.debug.Infof("GetBlockByHash (%s)", hash)
 	number := rawdb.ReadBlockNumber(bc.db, hash)
 	if number == nil {
+		bc.debug.Warningf("Unable to find block (%s) number", hash)
 		return nil
 	}
 	return bc.GetBlock(hash, *number)
@@ -73,8 +82,10 @@ func (bc *BlockChain) GetBlockByHash(hash ibft.Hash) *types.Block {
 
 // GetBlockByNumber retrieves a block from the database by number
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
+	bc.debug.Infof("GetBlockByNumber (%d)", number)
 	hash := rawdb.ReadBlockHash(bc.db, number)
 	if hash == (ibft.Hash{}) {
+		bc.debug.Warningf("Unable to find block (%d) hash ", number)
 		return nil
 	}
 	return bc.GetBlock(hash, number)
@@ -82,8 +93,10 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // GetBlock retrieves a block from the database by hash and number
 func (bc *BlockChain) GetBlock(hash ibft.Hash, number uint64) *types.Block {
+	bc.debug.Infof("GetBlock (%d, %s)", number, hash)
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
+		bc.debug.Warningf("Unable to find block (%d, %s)", number, hash)
 		return nil
 	}
 	return block
@@ -91,6 +104,7 @@ func (bc *BlockChain) GetBlock(hash ibft.Hash, number uint64) *types.Block {
 
 // WriteBlock writes the block to the database
 func (bc *BlockChain) WriteBlock(block *types.Block, receipts []*types.Receipt) error {
+	bc.debug.Infof("WriteBlock (%d, %s)", block.Number().Uint64(), block.Hash())
 	// Make sure no inconsistent state is leaked during insertion
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
@@ -133,16 +147,19 @@ func (bc *BlockChain) Export(w io.Writer) error {
 // ExportN writes a subset of the active chain to the given writer.
 func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	if first > last {
-		return errors.New("export failed: first " + string(first) + " is greater than last " + string(last))
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
+	bc.debug.Infof("Exporting blocks from %d to %d.", first, last)
 
 	/* start, reported := time.Now(), time.Now() */
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
 		if block == nil {
-			return errors.New("export failed on #" + string(nr) + ": not found")
+			bc.debug.Errorf("export failed on #%d: not found", nr)
+			return fmt.Errorf("export failed on #%d: not found", nr)
 		}
-		if err := block.EncodeRLP(w); err != nil {
+		if err := rlp.Encode(w, block); err != nil {
+			bc.debug.Errorf("encode block failed on #%d: %v", nr, err)
 			return err
 		}
 		/* if time.Since(reported) >= statsReportLimit { */

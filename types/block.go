@@ -54,30 +54,32 @@ func (b *Block) String() string {
 	return fmt.Sprintf("number %d", b.Number())
 }
 
-// EncodeRLP TODO
-func (b *Block) EncodeRLP(w io.Writer) error {
-	ext := extblock{
-		Header:       b.Header,
-		Transactions: b.Transactions,
+// ExportAsRLPEncodedProposal exports a block as an rlp encoeded proposal
+func (b *Block) ExportAsRLPEncodedProposal() ([]byte, error) {
+	propToBytes, err := rlp.EncodeToBytes(b)
+	if err != nil || propToBytes == nil {
+		return nil, err
 	}
-	propToBytes, err := rlp.EncodeToBytes(ext)
-	if err != nil {
-		return err
-	}
-	return rlp.Encode(w, ibft.EncodedProposal{
+	return rlp.EncodeToBytes(ibft.EncodedProposal{
 		Type: TypeBlock,
 		Prop: propToBytes,
 	})
 }
 
-// DecodeRLP implements rlp.Decoder, and load the consensus fields from a RLP stream.
-func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+// EncodeRLP export a block to rlp stream
+func (b *Block) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, extblock{
+		Header:       b.Header,
+		Transactions: b.Transactions,
+	})
+}
 
-	if err := s.Decode(&eb); err != nil {
+// DecodeRLP decodes a block from an rlp stream
+func (b *Block) DecodeRLP(s *rlp.Stream) error {
+	var ext extblock
+	if err := s.Decode(&ext); err != nil {
 		return err
 	}
-	b.Header, b.Transactions = eb.Header, eb.Transactions
-
+	b.Header, b.Transactions = ext.Header, ext.Transactions
 	return nil
 }

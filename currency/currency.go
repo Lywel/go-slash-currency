@@ -90,11 +90,11 @@ func (c *Currency) SyncAndStart(remotes []string) {
 	for _, remote := range remotes {
 		c.logger.Info("Syncing state from: ", remote)
 		resp, err := http.Get("http://" + remote + "/state")
-		defer resp.Body.Close()
 		if err != nil {
 			c.logger.Warningf("failed to get state from %s: %v", remote, err)
 			continue
 		}
+		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			c.logger.Warningf("failed to read state from %s: %v", remote, err)
@@ -150,6 +150,12 @@ func (c *Currency) Start(isFirstNode bool) {
 
 // DecodeProposal parses a payload and return a Proposal interface
 func (c *Currency) DecodeProposal(prop *ibft.EncodedProposal) (ibft.Proposal, error) {
+	if prop == nil {
+		return nil, errors.New("nil proposal")
+	}
+	if prop.Prop == nil {
+		return nil, errors.New("nil proposal.prop")
+	}
 	switch prop.Type {
 	case types.TypeBlock:
 		var b *types.Block
@@ -207,7 +213,7 @@ func (c *Currency) submitBlock() {
 		Time:       big.NewInt(time.Now().Unix()),
 	}, c.transactions)
 	c.logger.Info("Mine and submit block: ", block)
-	encodedProposal, err := rlp.EncodeToBytes(block)
+	encodedProposal, err := block.ExportAsRLPEncodedProposal()
 	if err != nil {
 		log.Print(err)
 		return
