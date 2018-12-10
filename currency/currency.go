@@ -24,14 +24,11 @@ import (
 )
 
 const (
-	blockInterval          = 5 * time.Second
-	blockTimeoutTime       = 8 * time.Second
-	blockDemurrageInterval = uint64(4320) // one week
+	blockInterval    = 5 * time.Second
+	blockTimeoutTime = 8 * time.Second
 )
 
 var (
-	demurrageCoefficent = 3000 // (0.01 / 30) = 1 / 3000
-
 	verbose = flag.Bool("verbose-currency", false, "print currency info level logs")
 
 	errInvalidProposal         = errors.New("invalid proposal")
@@ -166,10 +163,7 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	}
 	receipts := c.blockchain.State().ProcessBlock(block)
 	c.blockchain.WriteBlock(block, receipts)
-	n := block.Number().Uint64()
-	if n != 0 && n%blockDemurrageInterval == 0 {
-		c.applyDemurrage()
-	}
+
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
 	if c.blockTimeout != nil {
 		c.blockTimeout.Stop()
@@ -200,13 +194,6 @@ func (c *Currency) submitBlock() {
 		Proposal: encodedProposal,
 	}
 	c.backend.EventsOutChan() <- requestEvent
-}
-
-func (c *Currency) applyDemurrage() {
-	for _, o := range c.blockchain.State().GetStateObjects() {
-		dem := new(big.Int).Div(o.GetBalance(), big.NewInt(3000))
-		o.SubBalance(dem)
-	}
 }
 
 func (c *Currency) handleEvent() {

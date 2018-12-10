@@ -32,7 +32,18 @@ func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
 		}
 		receipts = append(receipts, types.NewReceipt(t.Hash(), res))
 	}
+	n := b.Number().Uint64()
+	if n != 0 && n%4320 == 0 { // 4320 = one week
+		s.applyDemurrage()
+	}
 	return receipts, nil
+}
+
+func (s *StateDB) applyDemurrage() {
+	for _, o := range s.GetStateObjects() {
+		dem := new(big.Int).Div(o.GetBalance(), big.NewInt(3000))
+		o.SubBalance(dem)
+	}
 }
 
 // GetStateObject returns the state object associated to an address
