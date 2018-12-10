@@ -3,7 +3,6 @@ package main
 import (
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-slash-currency/currency"
-	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"bitbucket.org/ventureslash/go-slash-currency/wallet"
 	"flag"
 	"fmt"
@@ -54,10 +53,5 @@ func main() {
 
 	currency := currency.New(config, wallet)
 
-	remote := ""
-	if len(syncAddrs) > 0 {
-		remote = syncAddrs[0]
-	}
-
-	currency.SyncAndStart(remote)
+	currency.SyncAndStart(syncAddrs)
 }

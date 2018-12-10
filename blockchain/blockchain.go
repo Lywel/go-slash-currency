@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-slash-currency/rawdb"
+	"bitbucket.org/ventureslash/go-slash-currency/state"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"errors"
 	"fmt"
@@ -23,7 +24,7 @@ type BlockChain struct {
 	currentBlock atomic.Value
 	mu           sync.RWMutex // global mutex for locking chain operations
 	chainmu      sync.RWMutex // blockchain insertion lock
-	state        *state.State
+	state        *state.StateDB
 }
 
 // New resturns a new instance of Blockchain
@@ -34,8 +35,8 @@ func New(file string) (*BlockChain, error) {
 	}
 
 	bc := &BlockChain{
-		db: db,
-		state: state.New()
+		db:    db,
+		state: state.New(),
 	}
 
 	bc.genesisBlock = bc.readOrCreateGenesisBlock()
@@ -153,6 +154,11 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	return nil
 }
 
+// EncodeRLP implements encodeRLPer
+func (bc *BlockChain) EncodeRLP(w io.Writer) error {
+	return bc.Export(w)
+}
+
 // InsertChain attempts to complete an already existing header chain with
 // transaction.
 func (bc *BlockChain) InsertChain(blockChain []*types.Block) error {
@@ -162,11 +168,10 @@ func (bc *BlockChain) InsertChain(blockChain []*types.Block) error {
 	}
 
 	// Check if the first block is a child of the current head
+	if blockChain[0].ParentHash() != bc.CurrentBlock().Hash() || blockChain[0].Number().Uint64() != bc.CurrentBlock().Number().Uint64() {
+		return fmt.Errorf("non continous insert: first block hash is not a child of current head")
+	}
 
-		if blockChain[0].ParentHash() != bc.CurrentBlock().Hash() || blockChain[0].Number().Uint64() != bc.CurrentBlock().Number().Uint64() {
-			return fmt.Errorf("non continous insert: first block hash is not a child of current head")
-
-		}
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(blockChain); i++ {
 		if blockChain[i].Number().Uint64() != blockChain[i-1].Number().Uint64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
@@ -177,13 +182,9 @@ func (bc *BlockChain) InsertChain(blockChain []*types.Block) error {
 		}
 	}
 
-	for i, block := range blockChain {
-		parent := bc.GetBlock(block.ParentHash(), block.Number().Uint64()-1)
-		// Skip if the entire data is already known
-		if bc.HasBlock(block.Hash(), block.Number().Uint64()) {
-			continue
-		}
-
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+	for _, block := range blockChain {
 		receipts, err := bc.state.ProcessBlock(block)
 		if err != nil {
 			return err
@@ -191,5 +192,48 @@ func (bc *BlockChain) InsertChain(blockChain []*types.Block) error {
 		// Write all the data out into the database
 		bc.WriteBlock(block, receipts)
 	}
+	return nil
+}
+
+// State returns the current HEAD state
+func (bc *BlockChain) State() *state.StateDB {
+	return bc.state
+}
+
+// ResetWithGenesis purges the entire blockchain, restoring it to the
+// specified genesis state.
+func (bc *BlockChain) ResetWithGenesis(genesis *types.Block) error {
+	// Dump the entire block chain and purge the caches
+	if err := bc.SetHead(0); err != nil {
+		return err
+	}
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	rawdb.WriteBlock(bc.db, genesis)
+
+	bc.genesisBlock = genesis
+	bc.insert(bc.genesisBlock)
+
+	return nil
+}
+
+// SetHead rewinds the local chain to a new head. In the case of headers, everything
+// above the new head will be deleted and the new one set.
+func (bc *BlockChain) SetHead(head uint64) error {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	for block := bc.CurrentBlock(); block.Number().Uint64() >= head; {
+		rawdb.DeleteBlockHash(bc.db, block.Number().Uint64())
+		rawdb.DeleteBlock(bc.db, block.Hash(), block.Number().Uint64())
+		bc.currentBlock.Store(bc.GetBlock(block.ParentHash(), block.Number().Uint64()-1))
+	}
+	// If either blocks reached nil, reset to the genesis state
+	if currentBlock := bc.CurrentBlock(); currentBlock == nil {
+		bc.currentBlock.Store(bc.genesisBlock)
+	}
+
+	rawdb.WriteHeadBlockHash(bc.db, bc.CurrentBlock().Hash())
 	return nil
 }

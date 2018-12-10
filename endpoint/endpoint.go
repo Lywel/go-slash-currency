@@ -10,6 +10,7 @@ import (
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
+	"bitbucket.org/ventureslash/go-slash-currency/blockchain"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"github.com/coryb/gotee"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -18,6 +19,8 @@ import (
 
 type currency interface {
 	DecodeProposal(*ibft.EncodedProposal) (ibft.Proposal, error)
+	BlockChain() *blockchain.BlockChain
+	PendingTransactions() []*types.Transaction
 }
 
 const logFile = "slash-currency.logs"
@@ -64,12 +67,28 @@ func New() *Endpoint {
 
 	http.HandleFunc("/hello", ep.helloHandler)
 	http.HandleFunc("/logs", ep.logsHandler)
+	http.HandleFunc("/state", ep.stateHandler)
 
 	return ep
 }
 
 func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, logFile)
+}
+
+func (ep *Endpoint) stateHandler(w http.ResponseWriter, r *http.Request) {
+	state := struct {
+		Blockchain   *blockchain.BlockChain
+		Transactions []*types.Transaction
+	}{}
+
+	state.Blockchain = ep.Currency.BlockChain()
+	state.Transactions = ep.Currency.PendingTransactions()
+
+	err := rlp.Encode(w, state)
+	if err != nil {
+		ep.debug.Warningf("failed to encode state: %v", err)
+	}
 }
 
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {

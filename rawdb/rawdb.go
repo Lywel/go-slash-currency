@@ -112,7 +112,12 @@ func WriteBlock(db *leveldb.DB, block *types.Block) {
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db *leveldb.DB, hash ibft.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
-	DeleteBlock(db, hash, number)
+	if err := db.Delete(blockNumberKey(hash), nil); err != nil {
+		log.Println("Failed to delete hash to number mapping", "err", err)
+	}
+	if err := db.Delete(blockKey(number, hash), nil); err != nil {
+		log.Println("Failed to delete block", "err", err)
+	}
 }
 
 // HasBlock verifies the existence of a block corresponding to the hash.

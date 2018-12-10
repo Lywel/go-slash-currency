@@ -89,14 +89,36 @@ func New(config *backend.Config, privateKey *ecdsa.PrivateKey) *Currency {
 func (c *Currency) SyncAndStart(remotes []string) {
 	for _, remote := range remotes {
 		c.logger.Info("Syncing state from: ", remote)
-		r, err := http.Get("http://" + remote + "/state")
+		resp, err := http.Get("http://" + remote + "/state")
+		defer resp.Body.Close()
 		if err != nil {
 			c.logger.Warningf("failed to get state from %s: %v", remote, err)
 			continue
 		}
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			c.logger.Warningf("failed to read state from %s: %v", remote, err)
+			continue
+		}
+		state := &struct {
+			Blockchain   []*types.Block
+			Transactions []*types.Transaction
+		}{}
+
+		err = rlp.DecodeBytes(body, state)
+		if err != nil {
+			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
+			continue
+		}
+
+		c.blockchain.ResetWithGenesis(state.Blockchain[0])
+		err = c.blockchain.InsertChain(state.Blockchain[1:])
+		if err != nil {
+			c.logger.Warningf("failed to insert blockchain from %s: %v", remote, err)
+			continue
+		}
 
 		// State has been successfully imported
-		// TODO fetch state
 		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
 		c.Start(false)
 		return
@@ -161,7 +183,7 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	if !ok {
 		return errInvalidProposal
 	}
-	receipts := c.blockchain.State().ProcessBlock(block)
+	receipts, _ := c.blockchain.State().ProcessBlock(block)
 	c.blockchain.WriteBlock(block, receipts)
 
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
@@ -289,4 +311,14 @@ func verifyTransaction(t transaction) error {
 func (c *Currency) addTransactionToList(t transaction) {
 	tx := types.NewTransaction(t.To, t.From, t.Amount)
 	c.transactions = append(c.transactions, tx)
+}
+
+// BlockChain returns the blockchain
+func (c *Currency) BlockChain() *blockchain.BlockChain {
+	return c.blockchain
+}
+
+// PendingTransactions returns the list of unprocessed transactions
+func (c *Currency) PendingTransactions() []*types.Transaction {
+	return c.transactions
 }
