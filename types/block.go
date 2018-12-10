@@ -40,6 +40,11 @@ func (b *Block) Hash() ibft.Hash {
 	return ibft.RlpHash(b)
 }
 
+// ParentHash returns the parentHash stored in the block header
+func (b *Block) ParentHash() ibft.Hash {
+	return b.Header.ParentHash
+}
+
 // Number return the number of a block
 func (b *Block) Number() *big.Int {
 	return new(big.Int).Set(b.Header.Number)

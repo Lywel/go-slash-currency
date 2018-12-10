@@ -115,6 +115,14 @@ func DeleteBlock(db *leveldb.DB, hash ibft.Hash, number uint64) {
 	DeleteBlock(db, hash, number)
 }
 
+// HasBlock verifies the existence of a block corresponding to the hash.
+func HasBlock(db *leveldb.DB, hash ibft.Hash, number uint64) bool {
+	if has, err := db.Has(blockKey(number, hash), nil); !has || err != nil {
+		return false
+	}
+	return true
+}
+
 // ReadReceipts retrieves all the transaction receipts belonging to a block.
 func ReadReceipts(db *leveldb.DB, hash ibft.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
