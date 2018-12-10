@@ -1,5 +1,9 @@
 package types
 
+import (
+	"bitbucket.org/ventureslash/go-ibft"
+)
+
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
 	ReceiptStatusFailed = uint64(0)
@@ -9,7 +13,7 @@ const (
 
 // Receipt represents the results of a transaction
 type Receipt struct {
-	TxHash []byte
+	TxHash ibft.Hash
 	Status uint64
 }
 
@@ -17,7 +21,7 @@ type Receipt struct {
 type Receipts []*Receipt
 
 // NewReceipt creates a transaction receipt
-func NewReceipt(txHash []byte, status uint64) *Receipt {
+func NewReceipt(txHash ibft.Hash, status uint64) *Receipt {
 	return &Receipt{
 		TxHash: txHash,
 		Status: status,

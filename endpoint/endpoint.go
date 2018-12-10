@@ -17,7 +17,6 @@ import (
 )
 
 type currency interface {
-	GetState() types.State
 	DecodeProposal(*ibft.EncodedProposal) (ibft.Proposal, error)
 }
 
@@ -65,7 +64,6 @@ func New() *Endpoint {
 
 	http.HandleFunc("/hello", ep.helloHandler)
 	http.HandleFunc("/logs", ep.logsHandler)
-	http.HandleFunc("/state", ep.syncHandler)
 
 	return ep
 }
@@ -77,13 +75,6 @@ func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
 	res := json.NewEncoder(w)
 	res.Encode("Hello world")
-}
-
-func (ep *Endpoint) syncHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	state := ep.Currency.GetState()
-	res := json.NewEncoder(w)
-	res.Encode(state)
 }
 
 // SetNetworkMapGetter sets the networkmap getter

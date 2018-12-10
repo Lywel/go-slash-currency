@@ -1,6 +1,17 @@
 package currency
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"errors"
+	"flag"
+	"io/ioutil"
+	"log"
+	"math/big"
+	"net/http"
+	"os"
+	"time"
+
 	"bitbucket.org/ventureslash/go-ibft"
 	"bitbucket.org/ventureslash/go-ibft/backend"
 	"bitbucket.org/ventureslash/go-ibft/core"
@@ -8,27 +19,19 @@ import (
 	"bitbucket.org/ventureslash/go-slash-currency/blockchain"
 	"bitbucket.org/ventureslash/go-slash-currency/endpoint"
 	"bitbucket.org/ventureslash/go-slash-currency/types"
-	"bytes"
-	"crypto/ecdsa"
-	"encoding/json"
-	"errors"
-	"flag"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/google/logger"
-	"io/ioutil"
-	"log"
-	"math/big"
-	"net/http"
-	"os"
-	"time"
 )
 
 const (
-	blockInterval    = 5 * time.Second
-	blockTimeoutTime = 8 * time.Second
+	blockInterval          = 5 * time.Second
+	blockTimeoutTime       = 8 * time.Second
+	blockDemurrageInterval = uint64(4320) // one week
 )
 
 var (
+	demurrageCoefficent = 3000 // (0.01 / 30) = 1 / 3000
+
 	verbose = flag.Bool("verbose-currency", false, "print currency info level logs")
 
 	errInvalidProposal         = errors.New("invalid proposal")
@@ -95,15 +98,8 @@ func (c *Currency) SyncAndStart(remotes []string) {
 			continue
 		}
 
-		var state types.State
-		err = json.NewDecoder(r.Body).Decode(&state)
-		if err != nil {
-			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
-			continue
-		}
-
 		// State has been successfully imported
-		c.handleState(state.Blockchain, state.Transactions)
+		// TODO fetch state
 		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
 		c.Start(false)
 		return
@@ -168,9 +164,12 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	if !ok {
 		return errInvalidProposal
 	}
-	// TODO: verify fiability of block appending
-	// missing receipt = nil
-	c.blockchain.WriteBlock(block, nil)
+	receipts := c.blockchain.State().ProcessBlock(block)
+	c.blockchain.WriteBlock(block, receipts)
+	n := block.Number().Uint64()
+	if n != 0 && n%blockDemurrageInterval == 0 {
+		c.applyDemurrage()
+	}
 	c.transactions = types.TxDifference(c.transactions, block.Transactions)
 	if c.blockTimeout != nil {
 		c.blockTimeout.Stop()
@@ -201,7 +200,13 @@ func (c *Currency) submitBlock() {
 		Proposal: encodedProposal,
 	}
 	c.backend.EventsOutChan() <- requestEvent
+}
 
+func (c *Currency) applyDemurrage() {
+	for _, o := range c.blockchain.State().GetStateObjects() {
+		dem := new(big.Int).Div(o.GetBalance(), big.NewInt(3000))
+		o.SubBalance(dem)
+	}
 }
 
 func (c *Currency) handleEvent() {
@@ -297,12 +302,4 @@ func verifyTransaction(t transaction) error {
 func (c *Currency) addTransactionToList(t transaction) {
 	tx := types.NewTransaction(t.To, t.From, t.Amount)
 	c.transactions = append(c.transactions, tx)
-}
-
-// GetState returns the current state (blockchain and transactions)
-func (c *Currency) GetState() types.State {
-	return types.State{
-		Blockchain:   c.blockchain,
-		Transactions: c.transactions,
-	}
 }

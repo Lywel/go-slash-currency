@@ -37,7 +37,7 @@ func NewBlock(header *Header, transactions []*Transaction) *Block {
 
 // Hash compute the hash of a block
 func (b *Block) Hash() ibft.Hash {
-	return ibft.RlpHash(b.Header)
+	return ibft.RlpHash(b)
 }
 
 // Number return the number of a block
