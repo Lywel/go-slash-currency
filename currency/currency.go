@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	blockInterval    = 5 * time.Second
-	blockTimeoutTime = 8 * time.Second
+	blockInterval           = 5 * time.Second
+	blockTimeoutTime        = 8 * time.Second
+	blockchainDesyncTimeout = 30 * time.Second
 )
 
 var (
@@ -53,7 +54,9 @@ type Currency struct {
 	endpoint      *endpoint.Endpoint
 	mineTimer     *time.Timer
 	blockTimeout  *time.Timer
+	desyncTimeout *time.Timer
 	logger        *logger.Logger
+	remotes       []string
 	coreRunning   bool
 	waitForValSet bool
 	currentSigner uint64
@@ -87,6 +90,7 @@ func New(config *backend.Config, privateKey *ecdsa.PrivateKey) *Currency {
 
 //SyncAndStart synchronize state before startig the currency
 func (c *Currency) SyncAndStart(remotes []string) {
+	c.remotes = remotes
 	for _, remote := range remotes {
 		c.logger.Info("Syncing state from: ", remote)
 		resp, err := http.Get("http://" + remote + "/state")
@@ -145,6 +149,7 @@ func (c *Currency) Start(isFirstNode bool) {
 	} else {
 		c.waitForValSet = true
 	}
+	c.desyncTimeout = time.AfterFunc(blockchainDesyncTimeout, c.updateBlockchainSince)
 	c.handleEvent()
 }
 
@@ -197,6 +202,10 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 		c.blockTimeout.Stop()
 	}
 	c.blockTimeout = time.AfterFunc(blockTimeoutTime, c.handleTimeout)
+	if c.desyncTimeout != nil {
+		c.desyncTimeout.Stop()
+	}
+	c.desyncTimeout = time.AfterFunc(blockchainDesyncTimeout, c.updateBlockchainSince)
 	c.currentSigner = proposal.Number().Uint64()
 
 	if c.isProposer() {
@@ -312,6 +321,11 @@ func verifyTransaction(t transaction) error {
 		return errUnauthorizedTransaction
 	}
 	return nil
+}
+
+func (c *Currency) updateBlockchainSince() {
+	// TODO: fetch blockchain from last block
+	// stop and restart core
 }
 
 func (c *Currency) addTransactionToList(t transaction) {
