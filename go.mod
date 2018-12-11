@@ -1,7 +1,7 @@
 module bitbucket.org/ventureslash/go-slash-currency
 
 require (
-	bitbucket.org/ventureslash/go-ibft v0.0.7-0.20181206074046-765d8c25b0e3
+	bitbucket.org/ventureslash/go-ibft dev
 	github.com/coryb/gotee v0.0.0-20160121183722-31c22512354e
 	github.com/ethereum/go-ethereum v1.8.17
 	github.com/go-stack/stack v1.8.0 // indirect
