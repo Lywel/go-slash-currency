@@ -276,14 +276,20 @@ func (bc *BlockChain) ResetWithGenesis(genesis *types.Block) error {
 // SetHead rewinds the local chain to a new head. In the case of headers, everything
 // above the new head will be deleted and the new one set.
 func (bc *BlockChain) SetHead(head uint64) error {
+	bc.debug.Infof("setHead(%d)", head)
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.CurrentBlock(); block.Number().Uint64() > head; {
+	block := bc.CurrentBlock()
+	for block.Number().Uint64() > head {
+		bc.debug.Infof("Delete (%d, %v)", block.Number().Uint64(), block.Hash())
 		rawdb.DeleteBlockHash(bc.db, block.Number().Uint64())
 		rawdb.DeleteBlock(bc.db, block.Hash(), block.Number().Uint64())
-		bc.currentBlock.Store(bc.GetBlock(block.ParentHash(), block.Number().Uint64()-1))
+		block = bc.GetBlock(block.ParentHash(), block.Number().Uint64()-1)
 	}
+
+	bc.currentBlock.Store(block)
+
 	// If either blocks reached nil, reset to the genesis state
 	if currentBlock := bc.CurrentBlock(); currentBlock == nil {
 		bc.currentBlock.Store(bc.genesisBlock)

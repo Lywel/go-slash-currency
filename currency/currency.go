@@ -30,7 +30,8 @@ const (
 )
 
 var (
-	verbose = flag.Bool("verbose-currency", false, "print currency info level logs")
+	verbose            = flag.Bool("verbose-currency", false, "print currency info level logs")
+	blockChainDataPath = flag.String("bc", "./chaindata", "blockchain storage path (defaut: './chaindata')")
 
 	errInvalidProposal         = errors.New("invalid proposal")
 	errInvalidBlock            = errors.New("invalid block hash")
@@ -64,7 +65,7 @@ type Currency struct {
 
 // New creates a new currency manager
 func New(config *backend.Config, privateKey *ecdsa.PrivateKey) *Currency {
-	bc, err := blockchain.New("./chaindata")
+	bc, err := blockchain.New(*blockChainDataPath)
 	if err != nil {
 		panic("blockchain failure: " + err.Error())
 	}
