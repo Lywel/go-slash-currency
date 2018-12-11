@@ -242,18 +242,12 @@ func (c *Currency) handleEvent() {
 			c.logger.Info("Handling JoinEvent")
 			addr := ibft.Address{}
 			addr.FromBytes(event.Msg)
-			if c.isProposer() {
-				c.backend.EventsOutChan() <- core.ValidatorSetEvent{
-					ValSet: c.valSet,
-					Dest:   addr,
-				}
-			} else {
-				c.logger.Info("Handling JoinEvent but i am not proposer")
-
+			c.backend.EventsOutChan() <- core.ValidatorSetEvent{
+				ValSet: c.valSet,
+				Dest:   addr,
 			}
 			c.backend.EventsInChan() <- core.AddValidatorEvent{Address: addr}
 		case ibft.TypeValidatorSetEvent:
-			c.logger.Info("Handling ValidatorSetEvent")
 			valSetEvent := core.ValidatorSetEvent{}
 			err := rlp.DecodeBytes(event.Msg, &valSetEvent)
 			if err != nil {
@@ -261,6 +255,8 @@ func (c *Currency) handleEvent() {
 				continue
 			}
 			if c.waitForValSet && valSetEvent.Dest == c.backend.Address() {
+				c.logger.Info("Handling ValidatorSetEvent")
+
 				c.handleValidatorSetEvent(valSetEvent)
 			}
 		case ibft.TypeRemoveValidatorEvent:
