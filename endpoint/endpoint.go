@@ -1,9 +1,12 @@
 package endpoint
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"io/ioutil"
+	"log"
+	"math/big"
 	"net/http"
 	"reflect"
 
@@ -21,6 +24,7 @@ type currency interface {
 	DecodeProposal(*ibft.EncodedProposal) (ibft.Proposal, error)
 	BlockChain() *blockchain.BlockChain
 	PendingTransactions() []*types.Transaction
+	GetBalance(addr ibft.Address) *big.Int
 }
 
 const logFile = "slash-currency.logs"
@@ -68,6 +72,7 @@ func New() *Endpoint {
 	http.HandleFunc("/hello", ep.helloHandler)
 	http.HandleFunc("/logs", ep.logsHandler)
 	http.HandleFunc("/state", ep.stateHandler)
+	http.HandleFunc("/balance", ep.balanceHandler)
 
 	return ep
 }
@@ -92,6 +97,33 @@ func (ep *Endpoint) stateHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		ep.debug.Warningf("failed to encode state: %v", err)
 	}
+}
+
+func (ep *Endpoint) balanceHandler(w http.ResponseWriter, r *http.Request) {
+	keys, ok := r.URL.Query()["account"]
+
+	if !ok || len(keys[0]) < 1 {
+		log.Println("Url Param 'account' is missing")
+		return
+	}
+
+	// Query()["key"] will return an array of items,
+	// we only want the single item.
+	key := keys[0]
+	bytes, _ := hex.DecodeString(key)
+	addr := ibft.Address{}
+
+	addr.FromBytes(bytes)
+	balance := ep.Currency.GetBalance(addr)
+
+	balanceJSON := struct {
+		Balance uint64 `json:"balance"`
+	}{}
+	balanceJSON.Balance = balance.Uint64()
+	res := json.NewEncoder(w)
+
+	res.Encode(balanceJSON)
+
 }
 
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {

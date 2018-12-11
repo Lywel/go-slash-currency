@@ -3,7 +3,9 @@ package currency
 import "time"
 
 func (c *Currency) mine() {
-	c.submitBlock()
+	if c.isProposer() {
+		c.submitBlock()
+	}
 }
 
 func (c *Currency) setTimer() {

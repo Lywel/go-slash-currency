@@ -99,6 +99,7 @@ func (c *Currency) SyncAndStart(remotes []string) {
 			c.logger.Warningf("failed to get state from %s: %v", remote, err)
 			continue
 		}
+
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -115,9 +116,9 @@ func (c *Currency) SyncAndStart(remotes []string) {
 			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
 			continue
 		}
-
 		c.blockchain.ResetWithGenesis(state.Blockchain[0])
 		err = c.blockchain.InsertChain(state.Blockchain[1:])
+
 		if err != nil {
 			c.logger.Warningf("failed to insert blockchain from %s: %v", remote, err)
 			continue
@@ -246,6 +247,9 @@ func (c *Currency) handleEvent() {
 					ValSet: c.valSet,
 					Dest:   addr,
 				}
+			} else {
+				c.logger.Info("Handling JoinEvent but i am not proposer")
+
 			}
 			c.backend.EventsInChan() <- core.AddValidatorEvent{Address: addr}
 		case ibft.TypeValidatorSetEvent:
@@ -342,4 +346,9 @@ func (c *Currency) BlockChain() *blockchain.BlockChain {
 // PendingTransactions returns the list of unprocessed transactions
 func (c *Currency) PendingTransactions() []*types.Transaction {
 	return c.transactions
+}
+
+// GetBalance returns the balance of an account
+func (c *Currency) GetBalance(addr ibft.Address) *big.Int {
+	return c.blockchain.State().GetBalance(addr)
 }
