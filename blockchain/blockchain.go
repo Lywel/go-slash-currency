@@ -45,8 +45,45 @@ func New(file string) (*BlockChain, error) {
 	}
 
 	bc.genesisBlock = bc.readOrCreateGenesisBlock()
+	if err := bc.loadLastState(); err != nil {
+		return nil, err
+	}
 
 	return bc, nil
+}
+
+func (bc *BlockChain) loadLastState() error {
+	bc.debug.Info("loadLastState")
+	// Restore the last known head block
+	head := rawdb.ReadHeadBlockHash(bc.db)
+	if head == (ibft.Hash{}) {
+		// Corrupt or empty database, init from scratch
+		bc.debug.Warning("Empty database, resetting chain")
+		return bc.Reset()
+	}
+
+	// Make sure the entire head block is available
+	currentBlock := bc.GetBlockByHash(head)
+	if currentBlock == nil {
+		// Corrupt or empty database, init from scratch
+		bc.debug.Warning("Head block missing, resetting chain ", "hash ", head)
+		return bc.Reset()
+	}
+	// Everything seems to be fine, set as the head block
+	bc.currentBlock.Store(currentBlock)
+
+	// Apply each transactions from each blocks to restore the state
+	bc.state = state.New()
+	for i := uint64(0); i <= currentBlock.Number().Uint64(); i++ {
+		bc.debug.Infof("loading tx from block #%d", i)
+		b := bc.GetBlockByNumber(i)
+		if b == nil {
+			return fmt.Errorf("Failed to load block #%d", i)
+		}
+		bc.state.ProcessBlock(b)
+	}
+
+	return nil
 }
 
 func (bc *BlockChain) readOrCreateGenesisBlock() *types.Block {
@@ -71,10 +108,10 @@ func (bc *BlockChain) readOrCreateGenesisBlock() *types.Block {
 
 // GetBlockByHash retrieves a block from the database by hash
 func (bc *BlockChain) GetBlockByHash(hash ibft.Hash) *types.Block {
-	bc.debug.Infof("GetBlockByHash (%s)", hash)
+	bc.debug.Infof("GetBlockByHash (%v)", hash)
 	number := rawdb.ReadBlockNumber(bc.db, hash)
 	if number == nil {
-		bc.debug.Warningf("Unable to find block (%s) number", hash)
+		bc.debug.Warningf("Unable to find block (%v) number", hash)
 		return nil
 	}
 	return bc.GetBlock(hash, *number)
@@ -93,10 +130,10 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // GetBlock retrieves a block from the database by hash and number
 func (bc *BlockChain) GetBlock(hash ibft.Hash, number uint64) *types.Block {
-	bc.debug.Infof("GetBlock (%d, %s)", number, hash)
+	bc.debug.Infof("GetBlock (%d, %v)", number, hash)
 	block := rawdb.ReadBlock(bc.db, hash, number)
 	if block == nil {
-		bc.debug.Warningf("Unable to find block (%d, %s)", number, hash)
+		bc.debug.Warningf("Unable to find block (%d, %v)", number, hash)
 		return nil
 	}
 	return block
@@ -104,7 +141,7 @@ func (bc *BlockChain) GetBlock(hash ibft.Hash, number uint64) *types.Block {
 
 // WriteBlock writes the block to the database
 func (bc *BlockChain) WriteBlock(block *types.Block, receipts []*types.Receipt) error {
-	bc.debug.Infof("WriteBlock (%d, %s)", block.Number().Uint64(), block.Hash())
+	bc.debug.Infof("WriteBlock (%d, %v) parent: %v", block.Number().Uint64(), block.Hash(), block.ParentHash())
 	// Make sure no inconsistent state is leaked during insertion
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
@@ -151,7 +188,6 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	}
 	bc.debug.Infof("Exporting blocks from %d to %d.", first, last)
 
-	/* start, reported := time.Now(), time.Now() */
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
 		if block == nil {
@@ -162,10 +198,6 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 			bc.debug.Errorf("encode block failed on #%d: %v", nr, err)
 			return err
 		}
-		/* if time.Since(reported) >= statsReportLimit { */
-		/* 	log.Info("Exporting blocks", "exported", block.Number().Uint64()-first, "elapsed", common.PrettyDuration(time.Since(start))) */
-		/* 	reported = time.Now() */
-		/* } */
 	}
 
 	return nil
@@ -185,22 +217,22 @@ func (bc *BlockChain) InsertChain(blockChain []*types.Block) error {
 	}
 
 	// Check if the first block is a child of the current head
-	if blockChain[0].ParentHash() != bc.CurrentBlock().Hash() || blockChain[0].Number().Uint64() != bc.CurrentBlock().Number().Uint64() {
-		return fmt.Errorf("non continous insert: first block hash is not a child of current head")
+	if blockChain[0].ParentHash() != bc.CurrentBlock().Hash() || blockChain[0].Number().Uint64() != bc.CurrentBlock().Number().Uint64()+1 {
+		bc.debug.Error("Non contiguous receipt insert ", "number ", blockChain[0].Number(), " hash ", blockChain[0].Hash(), " parent ", blockChain[0].ParentHash(),
+			" prevnumber ", bc.CurrentBlock().Number(), " prevhash ", bc.CurrentBlock().Hash())
+		return fmt.Errorf("non continous insert")
 	}
 
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(blockChain); i++ {
 		if blockChain[i].Number().Uint64() != blockChain[i-1].Number().Uint64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
-			/* log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(), */
-			/* 	"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash()) */
+			bc.debug.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
+				"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
 			return fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].Number().Uint64(),
 				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].Number().Uint64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
 		}
 	}
 
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
 	for _, block := range blockChain {
 		receipts, err := bc.state.ProcessBlock(block)
 		if err != nil {
@@ -217,9 +249,15 @@ func (bc *BlockChain) State() *state.StateDB {
 	return bc.state
 }
 
+// Reset purges the entire blockchain, restoring it to its genesis state.
+func (bc *BlockChain) Reset() error {
+	return bc.ResetWithGenesis(bc.genesisBlock)
+}
+
 // ResetWithGenesis purges the entire blockchain, restoring it to the
 // specified genesis state.
 func (bc *BlockChain) ResetWithGenesis(genesis *types.Block) error {
+	bc.debug.Infof("ResetWithGenesis (%d, %v)", genesis.Number().Uint64(), genesis.Hash())
 	// Dump the entire block chain and purge the caches
 	if err := bc.SetHead(0); err != nil {
 		return err
@@ -228,10 +266,10 @@ func (bc *BlockChain) ResetWithGenesis(genesis *types.Block) error {
 	defer bc.mu.Unlock()
 
 	rawdb.WriteBlock(bc.db, genesis)
+	bc.insert(genesis)
+	bc.debug.Infof("Successful reset to genesis hash %v", bc.CurrentBlock().Hash())
 
 	bc.genesisBlock = genesis
-	bc.insert(bc.genesisBlock)
-
 	return nil
 }
 
@@ -241,7 +279,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	for block := bc.CurrentBlock(); block.Number().Uint64() >= head; {
+	for block := bc.CurrentBlock(); block.Number().Uint64() > head; {
 		rawdb.DeleteBlockHash(bc.db, block.Number().Uint64())
 		rawdb.DeleteBlock(bc.db, block.Hash(), block.Number().Uint64())
 		bc.currentBlock.Store(bc.GetBlock(block.ParentHash(), block.Number().Uint64()-1))

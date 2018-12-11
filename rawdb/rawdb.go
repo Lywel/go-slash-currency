@@ -71,6 +71,15 @@ func WriteHeadBlockHash(db *leveldb.DB, hash ibft.Hash) {
 	}
 }
 
+// ReadHeadBlockHash stores the head block's hash.
+func ReadHeadBlockHash(db *leveldb.DB) ibft.Hash {
+	data, _ := db.Get(headBlockKey, nil)
+	if len(data) == 0 {
+		return ibft.Hash{}
+	}
+	return ibft.BytesToHash(data)
+}
+
 // ReadBlockRLP retrieves a full block (headaer and transactions) in RLP encoding.
 func ReadBlockRLP(db *leveldb.DB, hash ibft.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Get(blockKey(number, hash), nil)
@@ -95,6 +104,12 @@ func ReadBlock(db *leveldb.DB, hash ibft.Hash, number uint64) *types.Block {
 
 // WriteBlockRLP stores an RLP encoded block into the database.
 func WriteBlockRLP(db *leveldb.DB, hash ibft.Hash, number uint64, rlp rlp.RawValue) {
+	// Write the hash -> number mapping
+	var encoded = encodeBlockNumber(number)
+	key := blockNumberKey(hash)
+	if err := db.Put(key, encoded, nil); err != nil {
+		log.Println("Failed to store hash to number mapping", "err", err)
+	}
 	if err := db.Put(blockKey(number, hash), rlp, nil); err != nil {
 		log.Println("Failed to store block body", "err", err)
 	}

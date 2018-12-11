@@ -78,11 +78,14 @@ func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
 
 func (ep *Endpoint) stateHandler(w http.ResponseWriter, r *http.Request) {
 	state := struct {
-		Blockchain   *blockchain.BlockChain
+		Blockchain   []*types.Block
 		Transactions []*types.Transaction
 	}{}
 
-	state.Blockchain = ep.Currency.BlockChain()
+	state.Blockchain = []*types.Block{}
+	for i := uint64(0); i <= ep.Currency.BlockChain().CurrentBlock().Number().Uint64(); i++ {
+		state.Blockchain = append(state.Blockchain, ep.Currency.BlockChain().GetBlockByNumber(i))
+	}
 	state.Transactions = ep.Currency.PendingTransactions()
 
 	err := rlp.Encode(w, state)
