@@ -330,7 +330,7 @@ func (c *Currency) updateBlockchainSince() {
 }
 
 func (c *Currency) addTransactionToList(t transaction) {
-	tx := types.NewTransaction(t.To, t.From, t.Amount)
+	tx := types.NewTransaction(t.From, t.To, t.Amount)
 	c.transactions = append(c.transactions, tx)
 }
 

@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/hex"
+	"log"
 	"math/big"
 
 	"bitbucket.org/ventureslash/go-ibft"
@@ -20,6 +21,7 @@ func New() *StateDB {
 
 // ProcessBlock returns receitps of a block and update state
 func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
+
 	key := "f43f4e5489b270f7e46954ce772a5c4f91a068f5"
 	bytes, _ := hex.DecodeString(key)
 	rootAccount := ibft.Address{}
@@ -27,11 +29,14 @@ func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
 
 	receipts := []*types.Receipt{}
 	for _, t := range b.Transactions {
+		log.Print("Processing transaction ", t.From)
+
 		res := uint64(1)
 		sender := s.GetStateObject(t.From)
 		receiver := s.GetStateObject(t.To)
 		amount := t.Amount
 		if t.From == rootAccount {
+			log.Print("Transaction from root account")
 			receiver.AddBalance(amount)
 			receipts = append(receipts, types.NewReceipt(t.Hash(), res))
 			continue
