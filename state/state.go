@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/hex"
 	"math/big"
 
 	"bitbucket.org/ventureslash/go-ibft"
@@ -19,12 +20,23 @@ func New() *StateDB {
 
 // ProcessBlock returns receitps of a block and update state
 func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
+	key := "f43f4e5489b270f7e46954ce772a5c4f91a068f5"
+	bytes, _ := hex.DecodeString(key)
+	rootAccount := ibft.Address{}
+	rootAccount.FromBytes(bytes)
+
 	receipts := []*types.Receipt{}
 	for _, t := range b.Transactions {
 		res := uint64(1)
 		sender := s.GetStateObject(t.From)
 		receiver := s.GetStateObject(t.To)
 		amount := t.Amount
+		if t.From == rootAccount {
+			receiver.AddBalance(amount)
+			receipts = append(receipts, types.NewReceipt(t.Hash(), res))
+			continue
+		}
+
 		if !sender.SubBalance(amount) {
 			res = 0
 		} else {
@@ -40,7 +52,11 @@ func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
 }
 
 func (s *StateDB) applyDemurrage() {
-	for _, o := range s.GetStateObjects() {
+	rootAccount := ibft.Address{0}
+	for key, o := range s.GetStateObjects() {
+		if key == rootAccount {
+			continue
+		}
 		dem := new(big.Int).Div(o.GetBalance(), big.NewInt(3000))
 		o.SubBalance(dem)
 	}
