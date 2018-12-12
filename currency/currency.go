@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	blockInterval           = 5 * time.Second
-	blockTimeoutTime        = 8 * time.Second
-	blockchainDesyncTimeout = 30 * time.Second
+	blockInterval           = 20 * time.Second
+	blockTimeoutTime        = 30 * time.Second
+	blockchainDesyncTimeout = 60 * time.Second
 )
 
 var (
@@ -273,6 +273,7 @@ func (c *Currency) handleEvent() {
 				continue
 			}
 			if err = verifyTransaction(tx); err != nil {
+				// stop and restart core
 				c.logger.Warning(err)
 				continue
 			}
@@ -366,8 +367,8 @@ func (c *Currency) updateBlockchainSince() {
 		Sequence: c.blockchain.CurrentBlock().Number(),
 		Round:    ibft.Big0,
 	})
-	// TODO: fetch blockchain from last block
-	// stop and restart core
+	c.desyncTimeout = time.AfterFunc(blockchainDesyncTimeout, c.updateBlockchainSince)
+
 }
 
 func (c *Currency) addTransactionToList(t transaction) {

@@ -50,7 +50,7 @@ func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
 		receipts = append(receipts, types.NewReceipt(t.Hash(), res))
 	}
 	n := b.Number().Uint64()
-	if n != 0 && n%4320 == 0 { // 4320 = one week
+	if n != 0 && n%4320 == 0 { // 4320 = one day
 		s.applyDemurrage()
 	}
 	return receipts, nil
