@@ -327,6 +327,7 @@ func verifyTransaction(t transaction) error {
 
 func (c *Currency) updateBlockchainSince() {
 	c.backend.StopCore()
+	c.logger.Info("Blockchain desynchronized, resyncing...")
 
 	for _, remote := range c.remotes {
 		c.logger.Info("Syncing state from: ", remote)
