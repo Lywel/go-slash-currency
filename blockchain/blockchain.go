@@ -1,21 +1,22 @@
 package blockchain
 
 import (
-	"bitbucket.org/ventureslash/go-ibft"
-	"bitbucket.org/ventureslash/go-slash-currency/rawdb"
-	"bitbucket.org/ventureslash/go-slash-currency/state"
-	"bitbucket.org/ventureslash/go-slash-currency/types"
 	"flag"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/google/logger"
-	"github.com/syndtr/goleveldb/leveldb"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"bitbucket.org/ventureslash/go-ibft"
+	"bitbucket.org/ventureslash/go-slash-currency/rawdb"
+	"bitbucket.org/ventureslash/go-slash-currency/state"
+	"bitbucket.org/ventureslash/go-slash-currency/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/google/logger"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var verbose = flag.Bool("verbose-blockchain", false, "print blockchain info level logs")
@@ -264,7 +265,7 @@ func (bc *BlockChain) ResetWithGenesis(genesis *types.Block) error {
 	}
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
-
+	bc.state = state.New()
 	rawdb.WriteBlock(bc.db, genesis)
 	bc.insert(genesis)
 	bc.debug.Infof("Successful reset to genesis hash %v", bc.CurrentBlock().Hash())

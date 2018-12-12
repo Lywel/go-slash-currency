@@ -354,6 +354,7 @@ func (c *Currency) updateBlockchainSince() {
 			continue
 		}
 		err = c.blockchain.InsertChain(state.Blockchain[c.blockchain.CurrentBlock().Number().Uint64():])
+		
 
 		if err != nil {
 			c.logger.Warningf("failed to insert blockchain from %s: %v", remote, err)
