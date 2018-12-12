@@ -73,15 +73,40 @@ func New() *Endpoint {
 	http.HandleFunc("/logs", ep.logsHandler)
 	http.HandleFunc("/state", ep.stateHandler)
 	http.HandleFunc("/balance", ep.balanceHandler)
+	http.HandleFunc("/chain", ep.chainHandler)
 
 	return ep
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func (ep *Endpoint) logsHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	http.ServeFile(w, r, logFile)
 }
 
+func (ep *Endpoint) chainHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	state := struct {
+		Blockchain []*types.Block `json:"blockchain"`
+	}{}
+
+	state.Blockchain = []*types.Block{}
+	for i := uint64(0); i <= ep.Currency.BlockChain().CurrentBlock().Number().Uint64(); i++ {
+		state.Blockchain = append(state.Blockchain, ep.Currency.BlockChain().GetBlockByNumber(i))
+	}
+
+	json, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		ep.debug.Warningf("failed to encode blockchain: %v", err)
+	}
+	w.Write(json)
+}
+
 func (ep *Endpoint) stateHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	state := struct {
 		Blockchain   []*types.Block
 		Transactions []*types.Transaction
@@ -127,6 +152,7 @@ func (ep *Endpoint) balanceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ep *Endpoint) helloHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	res := json.NewEncoder(w)
 	res.Encode("Hello world")
 }
