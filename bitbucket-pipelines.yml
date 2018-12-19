@@ -1,6 +1,6 @@
 pipelines:
   branches:
-    dev:
+    master:
       - step:
           name: Build and test
           image: golang:latest
