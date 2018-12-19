@@ -8,6 +8,7 @@ require (
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/google/logger v0.0.0-20181112113803-324a7c096a0d
 	github.com/gorilla/websocket v1.4.0
+	github.com/hashicorp/golang-lru v0.5.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
 	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
 )
