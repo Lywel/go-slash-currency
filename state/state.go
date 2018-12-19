@@ -22,7 +22,7 @@ func New() *StateDB {
 // ProcessBlock returns receitps of a block and update state
 func (s *StateDB) ProcessBlock(b *types.Block) ([]*types.Receipt, error) {
 
-	key := "19c91a94a035cee5ee0b8e9b662e5408b684d698"
+	key := "0dedc69acd6405e2459c93efb0dbfa8d9c0b5ccb"
 	bytes, _ := hex.DecodeString(key)
 	rootAccount := ibft.Address{}
 	rootAccount.FromBytes(bytes)
