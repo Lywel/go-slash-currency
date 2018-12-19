@@ -1,18 +1,44 @@
-# This is a sample build configuration for Go.
-# Check our guides at https://confluence.atlassian.com/x/5Q4SMw for more examples.
-# Only use spaces to indent your .yml configuration.
-# -----
-# You can specify a custom docker image from Docker Hub as your build environment.
-image: golang:1.7
-
 pipelines:
-  default:
-    - step:
-        script: # Modify the commands below to build your repository.
-          - PACKAGE_PATH="\${GOPATH}/src/bitbucket.org/\${BITBUCKET_REPO_OWNER}/\${BITBUCKET_REPO_SLUG}"
-          - mkdir -pv "\${PACKAGE_PATH}"
-          - tar -cO --exclude-vcs --exclude=bitbucket-pipelines.yml . | tar -xv -C "\${PACKAGE_PATH}"
-          - cd "\${PACKAGE_PATH}"
-          - go get -v
-          - go build -v
-          - go test -v
+  branches:
+    dev:
+      - step:
+          name: Build and test
+          image: golang:latest
+          script:
+            - git config --global url."git@bitbucket.org:".insteadOf "https://bitbucket.org/"
+            - export GOOS=linux
+            - go build -v -a -installsuffix cgo -ldflags "-linkmode external -extldflags -static" -o app
+            - go test -v
+          artifacts:
+            - app
+      - step:
+          name: Pre Deploy
+          image: tstrohmeier/awscli:3.6.4
+          services:
+            - docker
+          script:
+            # 1) Define variables
+            - export BUILD_ID=$BITBUCKET_BRANCH_$BITBUCKET_COMMIT_$BITBUCKET_BUILD_NUMBER
+            - export IMAGE_TAG=$AWS_REGISTRY_URL/$BITBUCKET_REPO_SLUG:$BUILD_ID
+            # 2) Build the docker container
+            - docker build -t $IMAGE_TAG -f Dockerfile.scratch .
+            # 3) AWS login
+            - eval $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+            # - aws ecr create-repository --repository-name $BITBUCKET_REPO_SLUG 2>/dev/null
+            # 4) Push image to aws docker registry
+            - docker push $IMAGE_TAG
+      - step:
+          name: Deploy
+          image: atlassian/pipelines-kubectl:latest
+          script:
+            # 1) Define variables
+            - export BUILD_ID=$BITBUCKET_BRANCH_$BITBUCKET_COMMIT_$BITBUCKET_BUILD_NUMBER
+            - export IMAGE_TAG=$AWS_REGISTRY_URL/$BITBUCKET_REPO_SLUG:$BUILD_ID
+            # 2) Configure kubectl
+            - kubectl config set-cluster $KUBE_CLUSTER_NAME --insecure-skip-tls-verify=true --server=$KUBE_CLUSTER_HOST
+            - kubectl config set-credentials $KUBE_CLUSTER_USER --username=$KUBERNETES_USERNAME --password=$KUBERNETES_PASSWORD
+            - kubectl config set-context $KUBE_CONTEXT --cluster=$KUBE_CLUSTER_NAME --user=$KUBE_CLUSTER_USER
+            - kubectl config use-context $KUBE_CONTEXT
+            # 3) Update the deployment to use the new Docker image
+            - kubectl set image deployment/$BITBUCKET_REPO_SLUG $BITBUCKET_REPO_SLUG=$IMAGE_TAG
+            - kubectl rollout status deployment/$BITBUCKET_REPO_SLUG
