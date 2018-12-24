@@ -2,6 +2,8 @@ package currency
 
 import (
 	"errors"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -38,7 +40,8 @@ func (c *Currency) isProposer() bool {
 }
 
 func (c *Currency) getStartingBlockNumber() (uint64, error) {
-	return 0, nil
+	i, _ := strconv.ParseInt(os.Getenv("CA_START"), 10, 64)
+	return uint64(i), nil
 }
 
 func (c *Currency) waitForCAAuthorization() error {
@@ -56,6 +59,7 @@ func (c *Currency) waitForCAAuthorization() error {
 		time.Sleep(blockchainSyncDelay)
 		// Get the last blocks
 		c.syncBlockchain()
+		currentBlock = c.blockchain.CurrentBlock().Number().Uint64()
 	}
 
 	return nil

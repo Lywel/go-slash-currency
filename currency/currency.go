@@ -124,13 +124,7 @@ func (c *Currency) SyncAndStart(remotes []string) {
 			continue
 		}
 
-		err = c.waitForCAAuthorization()
-		if err != nil {
-			panic(err)
-		}
-
 		// State has been successfully imported
-		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
 		c.Start(false)
 		return
 	}
@@ -141,6 +135,11 @@ func (c *Currency) SyncAndStart(remotes []string) {
 
 // Start makes the currency manager run
 func (c *Currency) Start(isFirstNode bool) {
+	err := c.waitForCAAuthorization()
+	if err != nil {
+		panic(err)
+	}
+	c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
 	c.backend.Start()
 
 	defer c.backend.Stop()
@@ -334,40 +333,9 @@ func (c *Currency) updateBlockchainSince() {
 	c.backend.StopCore()
 	c.logger.Info("Blockchain desynchronized, resyncing...")
 
-	for _, remote := range c.remotes {
-		c.logger.Info("Syncing state from: ", remote)
-		resp, err := http.Get("http://" + remote + "/state")
-		if err != nil {
-			c.logger.Warningf("failed to get state from %s: %v", remote, err)
-			continue
-		}
-
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			c.logger.Warningf("failed to read state from %s: %v", remote, err)
-			continue
-		}
-		state := &struct {
-			Blockchain   []*types.Block
-			Transactions []*types.Transaction
-		}{}
-
-		err = rlp.DecodeBytes(body, state)
-		if err != nil {
-			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
-			continue
-		}
-		err = c.blockchain.InsertChain(state.Blockchain[c.blockchain.CurrentBlock().Number().Uint64():])
-
-		if err != nil {
-			c.logger.Warningf("failed to insert blockchain from %s: %v", remote, err)
-			continue
-		}
-
-		// State has been successfully imported
-		c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
-	}
+	c.syncBlockchain()
+	c.currentSigner = c.blockchain.CurrentBlock().Number().Uint64()
+	// State has been successfully imported
 
 	c.backend.StartCore(c.valSet, &ibft.View{
 		Sequence: c.blockchain.CurrentBlock().Number(),

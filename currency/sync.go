@@ -34,7 +34,7 @@ func (c *Currency) syncBlockchain() {
 			c.logger.Warningf("failed to decode state from %s: %v", remote, err)
 			continue
 		}
-		err = c.blockchain.InsertChain(state.Blockchain[c.blockchain.CurrentBlock().Number().Uint64():])
+		err = c.blockchain.InsertChain(state.Blockchain[c.blockchain.CurrentBlock().Number().Uint64()+1:])
 		if err != nil {
 			c.logger.Warningf("failed to insert blockchain from %s: %v", remote, err)
 			continue
