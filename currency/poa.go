@@ -1,6 +1,7 @@
 package currency
 
 import (
+	"bitbucket.org/ventureslash/go-ibft"
 	"errors"
 	"os"
 	"strconv"
@@ -63,4 +64,10 @@ func (c *Currency) waitForCAAuthorization() error {
 	}
 
 	return nil
+}
+
+func (c *Currency) isAuthorizedValidator(addr ibft.Address) bool {
+	return true
+	// TODO: http.Get("<ca url>/peer-authorization/" + addr) -> { addr: addr, startingBlock: 53 }
+	// return currentBlock < res.startingBlock
 }

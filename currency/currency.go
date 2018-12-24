@@ -217,6 +217,13 @@ func (c *Currency) Commit(proposal ibft.Proposal) error {
 	if c.isProposer() {
 		c.setTimer()
 	}
+
+	// TODO: remove some peers
+	// Every 100 blocks, get the updated whitelist from the CA
+	// Filter the current ValSet by this whiteList
+	// This will remove all the disAllowed peers including yourself if it's not
+	// your turn anymore
+	// ? c.valSet.FilterByList(whiteList)
 	return nil
 }
 
@@ -246,6 +253,11 @@ func (c *Currency) handleEvent() {
 			c.logger.Info("Handling JoinEvent")
 			addr := ibft.Address{}
 			addr.FromBytes(event.Msg)
+			if !c.isAuthorizedValidator(addr) {
+				c.logger.Warningf("Peer %s tried to join but is not authorized yet.", addr.String())
+				continue
+			}
+
 			c.backend.EventsOutChan() <- core.ValidatorSetEvent{
 				ValSet: c.valSet,
 				Dest:   addr,
